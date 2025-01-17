@@ -1,0 +1,276 @@
+import os
+import sys
+import shutil
+import yaml
+import argparse
+from dataclasses import dataclass
+from collections import defaultdict
+
+import fcsparser
+
+from scripts.ImportFiles import get_abs_path, get_app_dir, time_based_dir
+from scripts.apply_umap import process_files
+from scripts.nn import prepare_for_training, train_neural_network
+from scripts.run_prediction import predict, merge_prediction_results
+
+
+class CellScannerCLI():
+
+    def __init__(self, args):
+        # Initialize model-related attributes
+        self.model = None
+        self.scaler = None
+        self.label_encoder = None
+        self.conf = args.config
+        self.container = False
+
+        # Load config file
+        conf = load_yaml(args.config)
+
+        # Output dir
+        outdir = conf.get("output_directory").get("path")
+        if os.getcwd() == "/app":
+            self.output_dir = "/media"
+            self.container = True
+        elif outdir is None:
+            self.output_dir = get_app_dir()
+        else:
+            self.output_dir = outdir
+
+        # Blank files
+        blanks_dir = conf.get("blank_files").get("directories")
+        self.blank_files = parse_dicts(blanks_dir, entity="blank_files")
+
+        # Species files
+        species_directories = conf.get("species_files").get("directories")
+        self.all_species_files, self.all_species = parse_dicts(species_directories, entity="species_files", names="species_names")
+
+        print("all species within __init__:", self.all_species)
+
+        # Coculture files
+        coc_directories = conf.get("coculture_files").get("directories")
+        self.coculture_files = parse_dicts(coc_directories, "coculture_files")
+
+        # Training parameters
+        self.events = get_param_value("umap_events", conf)
+        self.n_neighbors = get_param_value("n_neighbors", conf)
+        self.umap_min_dist = get_param_value("umap_min_dist", conf)
+        self.nn_blank = get_param_value("nn_blank", conf)
+        self.nn_non_blank = get_param_value("nn_non_blank", conf)
+        self.folds = get_param_value("folds", conf)
+        self.epochs = get_param_value("epochs", conf)
+        self.batch_size = get_param_value("batch_size", conf)
+        self.early_stopping_patience = get_param_value("early_stopping_patience", conf)
+
+        # Prediction parameters
+        self.x_axis = get_param_value("x_axis", conf)
+        self.y_axis = get_param_value("y_axis", conf)
+        self.z_axis = get_param_value("z_axis", conf)
+
+        # Gating parameters
+        self.gating = get_param_value("gating", conf)
+
+        if self.gating:
+            self.stain_1 = get_stain_params("stain1", conf)
+            self.stain_2 = get_stain_params("stain2", conf)
+
+
+    def train_model(self):
+        cleaned_data = process_files(n_events = self.events, umap_n_neighbors=self.n_neighbors,
+            umap_min_dist=self.umap_min_dist, nonblank_threshold=self.nn_non_blank, blank_threshold=self.nn_blank,
+            species_files_names_dict=self.all_species, blank_files=self.blank_files
+        )
+
+        X_whitened, y_categorical, self.scaler, self.le = prepare_for_training(
+            cleaned_data=cleaned_data,
+            scaler=self.scaler,
+            le=self.label_encoder
+        )
+
+        self.model = train_neural_network(
+            fold_count=self.folds,
+            epochs=self.epochs,
+            batch_size=self.batch_size,
+            patience=self.early_stopping_patience,
+            X=X_whitened,
+            y=y_categorical,
+            species_names=self.le.classes_
+        )
+
+
+    def predict_coculture(self):
+
+        if self.model is None:
+            # load it from folder argumnt
+            print("hello friend")
+
+        multiple_cocultures = True if len(self.coculture_files) > 1 else False
+        for sample_file in self.coculture_files:
+
+            sample_id = os.path.basename(sample_file)
+            sample, _ = os.path.splitext(sample_id)
+
+            _, data_df = fcsparser.parse(sample_file, reformat_meta=True)
+
+            if 'Time' in data_df.columns:
+                self.data_df = data_df.drop(columns=['Time'])
+
+            if self.gating:
+                predict(
+                    sample=sample, multiple_cocultures=multiple_cocultures,
+                    model=self.model, scaler=self.scaler, label_encoder=self.le,
+                    data_df=self.data_df, output_dir=self.output_dir,
+                    x_axis_combo=self.x_axis, y_axis_combo=self.y_axis, z_axis_combo=self.z_axis,
+                    gating=self.gating, stain1=self.stain_1, stain2=self.stain_2
+                )
+            else:
+                predict(
+                    sample=sample, multiple_cocultures=multiple_cocultures,
+                    model=self.model, scaler=self.scaler, label_encoder=self.le,
+                    data_df=self.data_df, output_dir=self.output_dir,
+                    x_axis_combo=self.x_axis, y_axis_combo=self.y_axis, z_axis_combo=self.z_axis,
+                    gating=self.gating,
+                )
+
+        if multiple_cocultures:
+
+            print("Merge prediction of all samples into a single file.")
+            merge_prediction_results(self.output_dir, "prediction")
+
+            print("Merge prediction and uncertainties single file.")
+            merge_prediction_results(self.output_dir, "uncertainty")
+
+def load_yaml(yaml_file):
+    """
+    Load a yaml file
+    """
+    with open(yaml_file, 'r') as f:
+        try:
+            config = yaml.safe_load(f)
+            return config
+        except yaml.YAMLError as exc:
+            print(f"Error in configuration file: {exc}")
+            sys.exit(1)
+
+
+def parse_dicts(dir_list, entity, names=None):
+    """
+   Processes a list of directory info to extract file paths and optionally map them to names.
+
+    Parameters:
+    -----------
+    dir_list : list of dicts
+        List containing directory info, each with 'path' and 'filenames'.
+    entity : str
+        The entity being processed (e.g., "species_files").
+    names : str, optional
+        The key to map filenames to names (labels). If omitted, only file paths are returned.
+
+    Returns:
+    --------
+    set or tuple
+        - If `names` is provided, returns a tuple of:
+            - A set of file paths.
+            - A dictionary mapping names to file paths.
+        - Otherwise, returns only the set of file paths.
+    """
+    all_files = set()
+    if names:
+        all_maps = {}
+
+    for dir in dir_list:
+
+        case_dir = dir["directory"]
+
+        # Get pathway
+        case_dir_path = case_dir["path"]
+        if case_dir_path is None:
+            raise f"Please specify path for the {entity} in the configuration file."
+        if case_dir_path[0] == "~":
+            case_dir_path = os.path.expanduser(case_dir_path)
+
+        # Get filenames
+        filenames = case_dir.get("filenames")
+        if filenames is None:
+            filenames = os.listdir(case_dir_path)
+        files = [os.path.join(case_dir_path, x) for x in filenames]
+
+        # Map filenames to labels
+        if names:
+            species_names = case_dir[names]
+            if species_names is None:
+                raise ValueError(f"""
+                    Please provide {entity} in your configuration file.
+                    Make sure you have as many filenames as {entity} and have the names
+                    in the same order as their corresponding filenames so CellScanner can map them."""
+                )
+
+            # Make a list of the files mapping at each species name
+            maps = defaultdict(list)
+
+            for name, file in zip(species_names, files):
+                maps[name].append(file)
+
+            # Convert to regular dict (if needed)
+            maps = dict(maps)
+
+            # Update maps dictionary with maps of running directory
+            all_maps.update(maps)
+
+        # Update filenames set with filenames of running directory
+        all_files.update(files)
+
+    return (all_files, all_maps) if names else all_files
+
+
+def get_param_value(param, conf):
+    # v = conf.get(param).get("value")
+    v = conf.get(param, {}).get("value") or conf.get(param, {}).get("name")
+    if v is None:
+        v = conf.get(param).get("default")
+    if v is None:
+        raise ValueError(f"Provide a value to the {param} parameter, or set back the default value based on the config.yml template.")
+    return v
+
+
+def get_stain_params(stain, conf):
+    """
+    Build a Stain instance based on the configuration file.
+    """
+    # Get params from the yaml file
+    params = conf.get(stain)
+    channel = params.get("channel")
+    sign = params.get("sign")
+    value = params.get("value")
+
+    # Check if all stain params are there
+    if not all([channel, sign, value]) and stain=="stain1":
+        missing = [k for k, v in {"channel": channel, "sign": sign, "value": value}.items() if v is None]
+        raise ValueError(f"Please provide {' and '.join(missing)} for {stain}.")
+    elif not all([channel]):
+        missing = [k for k, v in {"channel": channel, "sign": sign, "value": value}.items() if v is None]
+        raise ValueError(f"Please provide {' and '.join(missing)} for {stain}.")
+
+    return Stain(channel, sign, value)
+
+
+@dataclass
+class Stain:
+    channel: str
+    sign: str
+    value: float
+
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description="CellScanner Command Line Interface")
+    parser.add_argument("--config", "-c", type=str, required=True, help="Path to the configuration file (.yml)")
+
+    # Parse the arguments
+    args = parser.parse_args()
+
+    cs = CellScannerCLI(args)
+
+    cs.train_model()
+
+    cs.predict_coculture()
