@@ -1,0 +1,7 @@
+__pycache__/
+.vscode/
+*.spec
+
+model/
+Prediction_*/ 
+working_files_*/

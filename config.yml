@@ -1,0 +1,225 @@
+# Configuration template file for CellscannerCLI v2.0.0
+# In this template, we use the test case (input files) under /Testfiles, assuming we have saved them locally
+# on our computer, under ~/software/Cellscanner
+
+# ---------------------
+# Data parameters
+# ---------------------
+output_directory:
+  path: ./MORELES
+  required: false
+  description: >
+    Directory where CellScanner will save intermediate files and findings.
+    If Docker is being used, this will automatically point to the mounted /media directory.
+    However, if you are running CellScanner as a Docker, please make sure you mount the directory path to the `/media` folder of the container.
+  default: Directory where CellscannerCLI.py is located.
+  type: str
+
+blank_files:
+  directories:
+    - directory:
+        path: ./Testfiles/
+        filenames:
+          - control_RCM_48h_100.fcs
+  required: true
+  description: >
+    In the `path` provide the directory where blanks are located.
+    If no `path` is provided, CellScanner will fail.
+    Under `filenames`, provide the filenames of the blank files. 
+    If no filenames are provided, CellScanner will assume that any .fcs file under the `path` is a blank.
+    Example: docker run -v ~/software/CellScannerApp/Testfiles/:/media cellscanner
+    You can use both relative paths and paths based on the home directory (~).
+
+species_files:
+  directories:
+    - directory:
+        path: ./Testfiles/
+        filenames:
+          - BH_mono_48h_100.fcs
+          - FP_mono_48h_100.fcs
+          - RI_mono_48h_100.fcs
+        species_names:
+          - BH
+          - FP
+          - RI
+  required: true
+  description: >
+    Provide files to be used for the training of the model. 
+    If your files are under different pathways, you may add as many `directory` entries as you wish.
+    A directory needs to have all `path`, `filenames` and `species_names`.
+    Important! Species names need to be in the same order as the filenames so CellScanner can map correctly which species is described by each file.
+    You can use both relative paths and paths based on the home directory (~).
+
+coculture_files:
+  directories:
+    - directory:
+        path: ./Testfiles/
+        filenames:
+          - coculture1_48h_100.fcs
+  required: true
+  description: >
+    Provide the coculture files you wish to classify. 
+    You may have as many `file_path` entries as you wish; each `file_path` stands for a certain `path` and for each, you may specify certain co-culture .fcs files of your interest.
+    If a `path` has no `filenames`, all .fcs files in the `path` will be used.
+    You can use both relative paths and paths based on the home directory (~).
+
+# ---------------------
+# Training parameters
+# ---------------------
+umap_events:
+  value:
+  required: false
+  default: 1000
+  description: >
+    Select number of random events to be selected from each species data to be used for the training of the model with UMAP
+  type: int
+
+n_neighbors:
+  value:
+  required: false
+  default: 50
+  description: >
+    The size of the local neighborhood UMAP will look at when attempting to learn the manifold structure of the data.
+    https://umap-learn.readthedocs.io/en/latest/parameters.html#n-neighbors
+  type: int
+
+umap_min_dist:
+  min_dist:
+  required: false
+  default: 0.0
+  description: >
+    how tightly UMAP is allowed to pack points together
+
+nn_blank:
+  value:
+  required: false
+  default: 20
+  description: >
+    "Neighbor threshold (non-Blank):"
+  type: int
+
+nn_non_blank:
+  value:
+  required: false
+  default: 25
+  description: >
+    "Neighbor threshold (non-Blank):"
+  type: int
+
+folds:
+  value:
+  required: false
+  default: 0
+  description: >
+    CellScanner uses the StratifiedKFold() scikit-learn feature to implement cross-validation.
+    Here, you need to set the number of splitting iterations (train/test sets) in the cross-validator.
+  type: int
+
+epochs:
+  value:
+  required: false
+  default: 0
+  description: >
+    Number of epochs to train the model. An epoch is an iteration over the entire x and y data provided.
+    The model is not trained for a number of iterations given by epochs, but merely until the epoch of index epochs is reached.
+    See https://www.tensorflow.org/api_docs/python/tf/keras/Sequential#fit
+  type: int
+
+batch_size:
+  value:
+  required: false
+  default: 32
+  description: >
+    Number of samples per gradient update.
+  type: int
+
+early_stopping_patience:
+  value:
+  required: false
+  default: 0
+  description: >
+    Early stopping is a form of regularization used to avoid overfitting when training 
+    a model with an iterative method. In CellScanner's implementation, we monitor the value of the 
+    accuracy. Patience stands for the mumber of epochs with no improvement after which training will be stopped.
+    For more: https://www.tensorflow.org/api_docs/python/tf/keras/callbacks/EarlyStopping
+  type: int
+
+# TODO: WHAT IF I WOULD LIKE TO USE A PREVIOUS MODEL
+
+# ---------------------
+# Prediction parameters
+# ---------------------
+x_axis:
+  name: FL1-A
+  required: false
+  default: First column as in the coculture file.
+  desription: >
+    The first channel of the coculture data to be used in the 3D plot.
+  type: str
+
+y_axis:
+  name: PI-H
+  required: false
+  default: First column as in the coculture file.
+  desription: >
+    The second channel of the coculture data to be used in the 3D plot.
+  type: str
+
+z_axis:
+  name: FL3-red-H
+  required: false
+  default: First column as in the coculture file.
+  desription: >
+    The third channel of the coculture data to be used in the 3D plot.
+  type: str
+
+# ---------------------
+# Gating parameters
+# ---------------------
+gating:
+  value: false
+  required: false
+  default: false
+  description: >
+    Set whether you wish data to be gated or not.
+  type: bool
+
+stain1:
+  channel:
+  sign: higher_than
+  sign_values:
+    - higher_than
+    - lower_than
+  value: 45
+  required: false
+  description: >
+    This parameter is required only when gating has been asked.
+    In that case, you need to provide 3 parameters to describe your stain:
+    The `channel`, that takes values the exact name of a column in the coculture file 
+    The `sign`, that can be either higher_than or lower_than, mentioning whether the channel 
+    needs to have either a higher or a lower value from the one you are about to set. 
+    And last, the actual `value`, with the threshold of the stain.
+  type:
+    - channel: str
+    - sign: str
+    - value: int
+
+stain2:
+  channel: cherry
+  sign:
+    values_from:
+      - higher_than
+      - lower_than
+  value:
+  required: false
+  description: >
+    This parameter is required only when gating has been asked.
+    In that case, you need to provide 3 parameters to describe your stain:
+    The `channel`, that takes values the exact name of a column in the coculture file 
+    The `sign`, that can be either higher_than or lower_than, mentioning whether the channel 
+    needs to have either a higher or a lower value from the one you are about to set. 
+    And last, the actual `value`, with the threshold of the stain.
+  type:
+    - channel: str
+    - sign: str
+    - value: int
