@@ -5,7 +5,8 @@ You may use the following files both with the GUI and the CLI.
 You may use these files to test CellScanner. 
 More specifically,  
 
-- `BH_mono_48h_100.fcs`  
+- `BH_mono_48h_100.fcs`
+- `BT_mono_48h_100.fcs`  
 - `FP_mono_48h_100.fcs`
 - `RI_mono_48h_100.fcs`
 
