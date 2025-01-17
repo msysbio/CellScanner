@@ -79,10 +79,12 @@ species_files:
           - BH_mono_48h_100.fcs
           - FP_mono_48h_100.fcs
           - RI_mono_48h_100.fcs
+          - BT_mono_48h_100.fcs
         species_names:
           - Bacteroides
           - Faecalibacterium
           - Roseburia
+          - Bacteroides
 ```
 Once your configuration file is ready, you may run CellScanner CLI :
 
