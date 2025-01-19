@@ -15,8 +15,6 @@ from sklearn.utils.class_weight import compute_class_weight
 from sklearn.metrics import confusion_matrix, classification_report
 from sklearn.model_selection import StratifiedKFold
 
-from .helpers import get_abs_path
-
 
 def train_neural_network(TrainPanel=None, **kwargs):
 
@@ -29,6 +27,7 @@ def train_neural_network(TrainPanel=None, **kwargs):
         patience = int(TrainPanel.patience_combo.currentText())
         X, y = TrainPanel.X, TrainPanel.y
         species_names = TrainPanel.le.classes_
+        working_directory = TrainPanel.file_panel.working_directory
         gui = True
 
     else:
@@ -38,12 +37,15 @@ def train_neural_network(TrainPanel=None, **kwargs):
         patience = kwargs["patience"]
         X, y = kwargs["X"], kwargs["y"],
         species_names=kwargs["species_names"]
+        working_directory=kwargs["working_directory"]
 
     if X is None or y is None:
         raise ValueError("No dataset loaded. Please run prepare_for_training first.")
 
     # Convert one-hot y back to integer if needed
     y_int = np.argmax(y, axis=1)
+
+    model_dir = os.path.join(working_directory, "model")  # get_abs_path('model/statistics')
 
     # -------------- IF user chooses 0 folds --------------
     if fold_count == 0:
@@ -96,7 +98,7 @@ def train_neural_network(TrainPanel=None, **kwargs):
         print(f"Single Split -> val_accuracy={val_accuracy:.4f}, val_loss={val_loss:.4f}")
 
         # Save the trained model
-        model_dir = get_abs_path('model/statistics')
+        # model_dir = os.path.join(working_directory, "model")  # get_abs_path('model/statistics')
         model.save(os.path.join(model_dir, 'trained_model.keras'))
 
         #  confusion matrix, classification report
@@ -199,7 +201,7 @@ def train_neural_network(TrainPanel=None, **kwargs):
         print(f"Best fold = {best_fold} with accuracy = {best_accuracy:.4f}")
 
         # Save best model
-        model_dir = get_abs_path('model/statistics')
+        # model_dir = get_abs_path('model/statistics')
         best_model.save(os.path.join(model_dir, 'trained_model.keras'))
 
         # Re-run the split to get best fold's data for confusion matrix
@@ -254,11 +256,15 @@ def prepare_for_training(TrainPanel=None, **kwargs):
         cleaned_data = TrainPanel.cleaned_data
         scaler = TrainPanel.scaler
         le = TrainPanel.le
+        scaling_constant = TrainPanel.scaling_constant.value()
+        working_directory = TrainPanel.file_panel.working_directory
         gui = True
     else:
         cleaned_data = kwargs["cleaned_data"]
         scaler = kwargs["scaler"]
         le = kwargs["le"]
+        scaling_constant = kwargs["scaling_constant"]
+        working_directory = kwargs["working_directory"]
 
     if cleaned_data is None:
         raise ValueError("No cleaned data available for training. Please process the data first.")
@@ -271,7 +277,7 @@ def prepare_for_training(TrainPanel=None, **kwargs):
     y_species = cleaned_data_copy['Species'].values
 
     # 3. arcsinh transform
-    X_arcsinh = np.arcsinh(X / 150)
+    X_arcsinh = np.arcsinh(X / scaling_constant)
 
     # 4. Scaling
     scaler = StandardScaler()
@@ -281,7 +287,7 @@ def prepare_for_training(TrainPanel=None, **kwargs):
     X_whitened = X_scaled
 
     # Save scaler for future use/prediction
-    model_dir = get_abs_path('model/statistics')
+    model_dir = os.path.join(working_directory, "model")  # get_abs_path('model/statistics')
     os.makedirs(model_dir, exist_ok=True)
     joblib.dump(scaler, os.path.join(model_dir, 'scaler.pkl'))
 

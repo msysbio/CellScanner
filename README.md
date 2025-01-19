@@ -17,7 +17,7 @@ To this end, you may run the following chunk to get CellScanner and create a `co
 ```bash
 git clone https://github.com/msysbio/CellScanner.git
 cd CellScanner
-conda env create -n cellscanner python=3.12.2 
+conda create -n cellscanner python=3.12.2 
 conda activate cellscanner
 pip install -r requirements.txt
 ```

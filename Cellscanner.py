@@ -10,7 +10,8 @@ from PyQt5.QtGui import QPixmap, QFont
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout,\
     QPushButton, QWidget, QLabel
 
-from scripts.ImportFiles import get_abs_path, ImportFilePanel, button_style, get_app_dir
+from scripts.helpers import get_abs_path, button_style, get_app_dir
+from scripts.ImportFiles import  ImportFilePanel
 from scripts.TrainingModel import TrainModelPanel
 from scripts.Prediction import PredictionPanel
 

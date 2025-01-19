@@ -16,7 +16,7 @@ def get_abs_path(relative_path):
     return os.path.join(get_app_dir(), relative_path)
 
 
-def time_based_dir(prefix, base_path, multiple_cocultures=False):  # used to be get_output_dir()
+def time_based_dir(prefix, base_path, multiple_cocultures=False):
     timestamp = datetime.now().strftime("%d-%m-%Y_%H-%M")
     time_dir_name = "_".join([prefix, timestamp])
     if os.getcwd() == "/app":
@@ -51,3 +51,23 @@ def button_style(font_size=12, padding=5, color="black", bck_col="#90EE90",
     }}
     """
     return style
+
+
+def load_model_from_files(trained_model_dir):
+
+    print("Loading model from files")
+    from tensorflow.keras.models import load_model
+    import joblib
+
+    modelfiles = ["trained_model.keras", "scaler.pkl", "label_encoder.pkl"]
+    model_path, scaler_path, le_path = [os.path.join(trained_model_dir, x) for x in modelfiles]
+
+    try:
+        model = load_model(model_path)
+        scaler = joblib.load(scaler_path)
+        label_encoder = joblib.load(le_path)
+        return model, scaler, label_encoder
+
+    except Exception as e:
+        print(f"Error loading model or preprocessing objects: {e}")
+        raise ValueError(f"No valid model directory. Check whether all 3 required files are there and valid.")

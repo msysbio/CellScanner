@@ -1,12 +1,12 @@
 #Prediction.py
-
+import os
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox,\
     QGroupBox, QLabel, QMessageBox, QLineEdit, QCheckBox, QFileDialog
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject
 import numpy as np
 import fcsparser
-from .helpers import button_style
-from .run_prediction import predict
+from .helpers import button_style, time_based_dir
+from .run_prediction import predict, merge_prediction_results
 
 """
 This script is used within the CellScanner application to predict species in coculture samples, apply gating for live/dead or debris
@@ -124,13 +124,13 @@ class PredictionPanel(QWidget):
 
 
     def fire_predict(self):
-
-        if self.data_df is None or self.data_df.empty:
+        self.samples_number = len(self.sample_to_df)
+        if self.samples_number == 0:
             raise ValueError("Coculture data have not been provided.")
 
         # Create a new thread for processing- without it the app froze while running Neural
         self.thread = QThread()
-        self.worker = WorkerPredict(parent_widget=self)
+        self.worker = WorkerPredict(PredictPanel=self)
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run_predict)
 
@@ -146,21 +146,40 @@ class PredictionPanel(QWidget):
 
 
     def prediction_completed(self):
-        QMessageBox.information(self, "Prediction Complete", f"Predictions have been saved in {self.results_dir}.")
+        QMessageBox.information(self, "Prediction Complete", f"Predictions have been saved in {self.predict_dir}.")
 
     def choose_coculture_file(self):
         select_coculture_message = ["Select Coculture File", "", "Flow Cytometry Files (*.fcs);;All Files (*)"]
-        coculture_filepath, _ = QFileDialog.getOpenFileName(self, *select_coculture_message)
+        coculture_filepath, _ = QFileDialog.getOpenFileNames(self, *select_coculture_message)
         if coculture_filepath:
-            _, data_df = fcsparser.parse(coculture_filepath, reformat_meta=True)
-            self.choose_coculture_file_button.setText(coculture_filepath.split('/')[-1])  # Display only the filename, not the full path
+            # try:
+            print("\n\n COCULTURE FILES: ", coculture_filepath)
 
-            # Drop the 'Time' column if it exists
-            if 'Time' in data_df.columns:
-                self.data_df = data_df.drop(columns=['Time'])
+            sample_to_df = {}
+            sample_numeric_columns = {}
 
-            # Ensure only numeric columns are used in combo boxes
-            numeric_columns = data_df.select_dtypes(include=[np.number]).columns
+            for coc in coculture_filepath:
+                _, data_df = fcsparser.parse(coc, reformat_meta=True)
+                # Drop the 'Time' column if it exists
+                if 'Time' in data_df.columns:
+                    data_df = data_df.drop(columns=['Time'])
+                    sample_file_basename = os.path.basename(coc)  # coc.split('/')[-1]
+                    sample, _ = os.path.splitext(sample_file_basename)
+
+                    # Ensure only numeric columns are used in combo boxes
+                    numeric_columns = data_df.select_dtypes(include=[np.number]).columns
+                    sample_numeric_columns[sample_file_basename] = numeric_columns
+                    sample_to_df[sample] = data_df
+
+            # Show files selected in the button
+            self.choose_coculture_file_button.setText(",".join(sample_to_df.keys()))  # Display only the filename, not the full path
+
+            # Check if all files share the same numeric column names
+            all_same = all(value.equals(list(sample_numeric_columns.values())[0]) for value in sample_numeric_columns.values())
+            if not all_same:
+                self.on_error("\
+                    Column names on your coculture files differ. Please make sure you only include files sharing the same column names."
+                )
 
             # Populate the combo boxes with the numeric column names
             self.stain1_combo.addItems(numeric_columns)
@@ -169,12 +188,22 @@ class PredictionPanel(QWidget):
             self.y_axis_combo.addItems(numeric_columns)
             self.z_axis_combo.addItems(numeric_columns)
 
-            print("Coculture file loaded and 'Time' column dropped.")
+            # Keep dictionary with sample names (key) and their corresponding data_df (value)
+            self.sample_to_df = sample_to_df
+
+            # except:
+            #     self.on_error("Something went off with your coculture files.")
 
         else:
             print("No coculture file selected.")
-            # coculture_filepath, _ = QFileDialog.getOpenFileName(self, *select_coculture_message)
             self.choose_coculture_file_button.setText(select_coculture_message[0])
+
+
+    def on_error(self, message):
+        self.stop_loading_cursor()
+        QMessageBox.critical(self, "Error", message)
+        self.thread = None
+
 
     def toggle_gating_options(self):
         # Show or hide gating options based on checkbox state
@@ -192,12 +221,39 @@ class WorkerPredict(QObject):
 
     finished_signal = pyqtSignal()  # Define a signal for completion
 
-    def __init__(self, parent_widget=None):
+    def __init__(self, PredictPanel=None):
         super().__init__()
-        self.parent_widget = parent_widget  # Store the QWidget instance
+        self.PredictPanel = PredictPanel  # Store the QWidget instance
 
 
     def run_predict(self):
-        self.parent_widget = predict(self.parent_widget)
+
+        multiple_cocultures = True if self.PredictPanel.samples_number > 1 else False
+
+        # Get output directory for the predictions
+        self.PredictPanel.predict_dir = time_based_dir(prefix="Prediction",
+                                          base_path=self.PredictPanel.file_panel.output_dir,
+                                          multiple_cocultures=multiple_cocultures)
+        os.makedirs(self.PredictPanel.predict_dir, exist_ok=True)
+
+        # Loop over the coculture files and run predict()
+        for sample, data_df in self.PredictPanel.sample_to_df.items():
+
+            # Set data_df for the sample in process
+            self.PredictPanel.data_df = data_df
+            self.PredictPanel.sample = sample
+
+            # Run predict() for a single sample
+            predict(self.PredictPanel)
+
+        # Merge predictions in case of multiple coculture files
+        if multiple_cocultures:
+
+            print("Merge prediction of all samples into a single file.")
+            merge_prediction_results(self.PredictPanel.predict_dir, "prediction")
+
+            print("Merge prediction and uncertainties single file.")
+            merge_prediction_results(self.PredictPanel.predict_dir, "uncertainty")
+
         self.finished_signal.emit()  # Emit the finished signal when done
 
