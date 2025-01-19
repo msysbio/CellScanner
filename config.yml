@@ -35,11 +35,11 @@ species_files:
     - directory:
         path: ./Testfiles/
         filenames:
-          - BH_mono_48h_100.fcs
+          - BT_mono_48h_100.fcs
           - FP_mono_48h_100.fcs
           - RI_mono_48h_100.fcs
         species_names:
-          - BH
+          - BT
           - FP
           - RI
   required: true
@@ -82,7 +82,7 @@ prev_trained_model:
 # Training parameters
 # ---------------------
 umap_events:
-  value:
+  value: 1000
   required: false
   default: 1000
   description: >
@@ -90,7 +90,7 @@ umap_events:
   type: int
 
 n_neighbors:
-  value:
+  value: 50
   required: false
   default: 50
   description: >
@@ -99,7 +99,7 @@ n_neighbors:
   type: int
 
 umap_min_dist:
-  min_dist:
+  min_dist: 0
   required: false
   default: 0.0
   description: >
@@ -107,7 +107,7 @@ umap_min_dist:
   type: float
 
 scaling_constant:
-  value: 155
+  value: 150
   required: false
   default: 150
   description: >
@@ -115,7 +115,7 @@ scaling_constant:
   type: int
 
 nn_blank:
-  value:
+  value: 20
   required: false
   default: 20
   description: >
@@ -123,7 +123,7 @@ nn_blank:
   type: int
 
 nn_non_blank:
-  value:
+  value: 25
   required: false
   default: 25
   description: >
@@ -131,7 +131,7 @@ nn_non_blank:
   type: int
 
 folds:
-  value:
+  value: 0
   required: false
   default: 0
   description: >
@@ -140,9 +140,9 @@ folds:
   type: int
 
 epochs:
-  value:
+  value: 50
   required: false
-  default: 0
+  default: 50
   description: >
     Number of epochs to train the model. An epoch is an iteration over the entire x and y data provided.
     The model is not trained for a number of iterations given by epochs, but merely until the epoch of index epochs is reached.
@@ -150,7 +150,7 @@ epochs:
   type: int
 
 batch_size:
-  value:
+  value: 32
   required: false
   default: 32
   description: >
@@ -158,9 +158,9 @@ batch_size:
   type: int
 
 early_stopping_patience:
-  value:
+  value: 10
   required: false
-  default: 0
+  default: 10
   description: >
     Early stopping is a form of regularization used to avoid overfitting when training 
     a model with an iterative method. In CellScanner's implementation, we monitor the value of the 
@@ -174,7 +174,7 @@ early_stopping_patience:
 # Prediction parameters
 # ---------------------
 x_axis:
-  name: FL1-A
+  name:
   required: false
   default: First column as in the coculture file.
   desription: >
@@ -182,7 +182,7 @@ x_axis:
   type: str
 
 y_axis:
-  name: PI-H
+  name:
   required: false
   default: First column as in the coculture file.
   desription: >
@@ -190,7 +190,7 @@ y_axis:
   type: str
 
 z_axis:
-  name: FL3-red-H
+  name:
   required: false
   default: First column as in the coculture file.
   desription: >

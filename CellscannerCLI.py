@@ -78,6 +78,7 @@ class CellScannerCLI():
 
 
     def train_model(self):
+
         cleaned_data = process_files(
             n_events = self.events, umap_n_neighbors=self.n_neighbors,
             umap_min_dist=self.umap_min_dist, nonblank_threshold=self.nn_non_blank,
@@ -122,7 +123,11 @@ class CellScannerCLI():
             _, data_df = fcsparser.parse(sample_file, reformat_meta=True)
 
             if 'Time' in data_df.columns:
-                self.data_df = data_df.drop(columns=['Time'])
+                print()
+                data_df = data_df.drop(columns=['Time'])
+
+            if self.x_axis or self.y_axis or self.z_aixs not in data_df.columns:
+                self.x_axis, self.y_axis, self.z_axis = data_df.columns[:3]
 
             # Define common parameters
             predict_params = {
@@ -130,7 +135,7 @@ class CellScannerCLI():
                 "model": self.model,
                 "scaler": self.scaler,
                 "label_encoder": self.le,
-                "data_df": self.data_df,
+                "data_df": data_df,
                 "predict_dir": self.predict_dir,
                 "x_axis_combo": self.x_axis,
                 "y_axis_combo": self.y_axis,
