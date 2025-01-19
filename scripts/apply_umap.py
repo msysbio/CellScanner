@@ -7,7 +7,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import NearestNeighbors
 import plotly.express as px
 from .nn import prepare_for_training
-from .ImportFiles import get_abs_path
+from .helpers import get_abs_path
 
 
 def process_file(file, species_name, n_events):
@@ -37,6 +37,7 @@ def process_files(TrainPanel=None, **kwargs):
             "blank_threshold": int(TrainPanel.nn_blank_combo.currentText()),
             "species_files_names_dict": TrainPanel.file_panel.species_files,
             "blank_files": TrainPanel.file_panel.blank_files,
+            "working_directory": TrainPanel.file_panel.working_directory
         }
         gui = True
     else:
@@ -44,7 +45,7 @@ def process_files(TrainPanel=None, **kwargs):
         required_keys = [
             "n_events", "umap_n_neighbors", "umap_min_dist",
             "blank_files", "blank_threshold", "nonblank_threshold",
-            "species_files_names_dict"
+            "species_files_names_dict", "working_directory"
         ]
         params = {key: kwargs[key] for key in required_keys}
 
@@ -56,30 +57,30 @@ def process_files(TrainPanel=None, **kwargs):
     blank_threshold = params["blank_threshold"]
     species_files_names_dict = params["species_files_names_dict"]
     blank_files = params["blank_files"]
+    working_directory = params["working_directory"]
 
     # Process files for all species dynamically
     all_species_dataframes = []
     for species_name, species_files in species_files_names_dict.items():
         species_dataframes = []
-        for file in species_files:
-            print(">>>", file)
+        for sp_file in species_files:
             try:
                 species_dataframes.append(
-                    process_file(file=file, species_name=species_name, n_events=n_events)
+                    process_file(file=sp_file, species_name=species_name, n_events=n_events)
                 )
             except Exception as e:
-                print(f"Error processing file {file}: {e}")
+                print(f"Error processing file {sp_file}: {e}")
         all_species_dataframes.append(species_dataframes)
 
     # Process blanks
     blank_dataframes = []
-    for file in blank_files:
+    for blank_file in blank_files:
         try:
             blank_dataframes.append(
-                process_file(file=file, species_name='Blank', n_events=n_events)
+                process_file(file=blank_file, species_name='Blank', n_events=n_events)
             )
         except Exception as e:
-            print(f"Error processing blank file {file}: {e}")
+            print(f"Error processing blank file {blank_file}: {e}")
 
     # Combine data
     combined_df = pd.concat([df for species_dataframes in all_species_dataframes for df in species_dataframes] + blank_dataframes)
@@ -98,14 +99,10 @@ def process_files(TrainPanel=None, **kwargs):
     )
 
     embedding = reducer.fit_transform(scaled_data_subset)
-    print("========\nEmbedding\n")
-    print(embedding)
 
     label_map = {species_name: idx for idx, species_name in enumerate(species_files_names_dict.keys())}
     label_map['Blank'] = len(label_map)
     mapped_labels = combined_df['Species'].map(label_map).values
-    print("====\nmapped_labels\n")
-    print(mapped_labels)
 
     # Generate UMAP plot before filtering
     fig_before = px.scatter_3d(
@@ -126,7 +123,7 @@ def process_files(TrainPanel=None, **kwargs):
     fig_before.update_traces(marker=dict(size=1))
 
     # Define the path to save the plot
-    model_dir = get_abs_path('model/statistics')
+    model_dir = os.path.join(working_directory, "model")  # get_abs_path('model/statistics')
     os.makedirs(model_dir, exist_ok=True)
     umap_before_path = os.path.join(model_dir, 'umap_before_filtering.html')
 
@@ -152,10 +149,7 @@ def process_files(TrainPanel=None, **kwargs):
 
     cleaned_data = combined_df.iloc[indices_to_keep]
 
-    print("indices_to_keep length: ", len(indices_to_keep))
-    print("combined_df shape:", combined_df.shape)
-
-        # Generate UMAP plot after filtering
+    # Generate UMAP plot after filtering
     fig_after = px.scatter_3d(
         x=embedding[indices_to_keep, 0],
         y=embedding[indices_to_keep, 1],

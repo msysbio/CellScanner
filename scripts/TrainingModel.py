@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox,\
-    QGroupBox, QLabel, QMessageBox, QApplication
+    QGroupBox, QLabel, QMessageBox, QApplication, QSpinBox
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject
 
 from .helpers import button_style
@@ -122,10 +122,24 @@ class TrainModelPanel(QWidget):
         nn_blank_layout.addWidget(self.nn_blank_combo)
         nn_layout.addLayout(nn_blank_layout)
 
+        # SCALING CONSTANT
+        scaling_constant_layout = QHBoxLayout()
+        scaling_constant_label = QLabel("Scaling Constant:", self)
+        scaling_constant_layout.addWidget(scaling_constant_label)
+
+        self.scaling_constant = QSpinBox(self)
+        self.scaling_constant.setRange(0, 1000)  # Set minimum and maximum values
+        self.scaling_constant.setSingleStep(1)  # Set step size
+        self.scaling_constant.setValue(150)  # Set default value
+        scaling_constant_layout.addWidget(self.scaling_constant)
+
+        nn_layout.addLayout(scaling_constant_layout)
+
+
         # Add the NN group box to the main layout
         self.layout.addWidget(self.nn_group)
 
-        #Model specific options grooup
+        # Model specific options grooup
         self.model_settings_group = QGroupBox("Model Specific Settings", self)
         model_settings_layout = QVBoxLayout(self.model_settings_group)
 
@@ -251,7 +265,6 @@ class WorkerProcessFiles(QObject):
 
 
     def run_process_files(self):
-        print("\n\n\n>>>>>>>>> worker process: ", self.__dict__)
         self.parent_widget = process_files(self.parent_widget)
         self.finished_signal.emit()  # Emit the finished signal when done
 

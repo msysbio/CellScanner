@@ -3,7 +3,7 @@
 # on our computer, under ~/software/Cellscanner
 
 # ---------------------
-# Data parameters
+# Import data
 # ---------------------
 output_directory:
   path: ./MORELES
@@ -63,6 +63,21 @@ coculture_files:
     If a `path` has no `filenames`, all .fcs files in the `path` will be used.
     You can use both relative paths and paths based on the home directory (~).
 
+prev_trained_model:
+  path:
+  required: false
+  default:
+  description: >
+    (optional)
+    In case you want to use a previously trained model, you may provide the path to its files.
+    Make sure that the path provided includes all the following 3 files: 
+    - trained_model.keras
+    - scaler.pkl
+    - label_encoder.pkl
+    If any of these files is missinge, CellScanner will fail.
+    Attention! When a previous model is used, you need to make sure you provide the scaling_constant you used to train the model.
+  type: str
+
 # ---------------------
 # Training parameters
 # ---------------------
@@ -89,6 +104,15 @@ umap_min_dist:
   default: 0.0
   description: >
     how tightly UMAP is allowed to pack points together
+  type: float
+
+scaling_constant:
+  value: 155
+  required: false
+  default: 150
+  description: >
+    Value
+  type: int
 
 nn_blank:
   value:
