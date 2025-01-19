@@ -12,120 +12,91 @@ from tensorflow.keras.models import load_model
 import plotly.express as px
 import plotly.graph_objects as go
 
-from .helpers import time_based_dir, get_abs_path
+from .helpers import get_abs_path
 
 
 # Main function to be called from the worker
-def predict(CellscannerGUI=None, **kwargs):
+def predict(PredictionPanel=None, **kwargs):
 
     gui = False
-    if type(CellscannerGUI).__name__ == "PredictionPanel":
+    if type(PredictionPanel).__name__ == "PredictionPanel":
 
-        model = getattr(CellscannerGUI.train_panel, 'model', None)
-        scaler = getattr(CellscannerGUI.train_panel, 'scaler', None)
-        label_encoder = getattr(CellscannerGUI.train_panel, 'le', None)
+        # Attempt to retrieve components from file_panel first
+        model, scaler, label_encoder, scaling_constant = get_model_components(PredictionPanel.file_panel)
 
-        data_df = CellscannerGUI.data_df
-        output_dir = CellscannerGUI.file_panel.output_dir
+        # Fallback to train_panel if not found in file_panel
+        if model is None:
+            model, scaler, label_encoder, scaling_constant = get_model_components(PredictionPanel.train_panel)
 
-        x_axis_combo = CellscannerGUI.x_axis_combo.currentText()
-        y_axis_combo = CellscannerGUI.y_axis_combo.currentText()
-        z_axis_combo = CellscannerGUI.z_axis_combo.currentText()
+        data_df = PredictionPanel.data_df
+        output_dir = PredictionPanel.predict_dir
 
-        gating = CellscannerGUI.gating_checkbox.isChecked()
-
-        # TODO: TO ADD sample AND multiple_cocultures
-        multiple_cocultures = False
-        sample = None
+        x_axis_combo = PredictionPanel.x_axis_combo.currentText()
+        y_axis_combo = PredictionPanel.y_axis_combo.currentText()
+        z_axis_combo = PredictionPanel.z_axis_combo.currentText()
+        gating = PredictionPanel.gating_checkbox.isChecked()
+        sample = PredictionPanel.sample
 
         if gating:
             # Stain 1
-            stain1 = CellscannerGUI.stain1_combo.currentText()  # It should be the column name
-            stain1_relation = CellscannerGUI.stain1_relation.currentText()
-            stain1_threshold = float(CellscannerGUI.stain1_threshold.text())
+            stain1 = PredictionPanel.stain1_combo.currentText()  # It should be the column name
+            stain1_relation = PredictionPanel.stain1_relation.currentText()
+            stain1_threshold = float(PredictionPanel.stain1_threshold.text())
             # Stain 2
-            stain2 = CellscannerGUI.stain2_combo.currentText()  # It should be the column name
-            stain2_relation = CellscannerGUI.stain2_relation.currentText()
-            stain2_threshold = float(CellscannerGUI.stain2_threshold.text()) if CellscannerGUI.stain2_threshold.text() else None
+            stain2 = PredictionPanel.stain2_combo.currentText()  # It should be the column name
+            stain2_relation = PredictionPanel.stain2_relation.currentText()
+            stain2_threshold = float(PredictionPanel.stain2_threshold.text()) if PredictionPanel.stain2_threshold.text() else None
         gui = True
 
     else:
         sample = kwargs["sample"]
-        multiple_cocultures = kwargs["multiple_cocultures"]
         model = kwargs["model"]
         scaler = kwargs["scaler"]
         label_encoder = kwargs["label_encoder"]
         data_df = kwargs["data_df"]
-        output_dir = kwargs["output_dir"]
+        output_dir = kwargs["predict_dir"]
         x_axis_combo = kwargs["x_axis_combo"]
         y_axis_combo = kwargs["y_axis_combo"]
         z_axis_combo = kwargs["z_axis_combo"]
         gating = kwargs["gating"]
+        scaling_constant = kwargs["scaling_constant"]
         if gating:
             Stain1 = kwargs["stain1"]
             stain1, stain1_relation, stain1_threshold = Stain1.channel, Stain1.sign, Stain1.value
             Stain2 = kwargs["stain2"]
             stain2, stain2_relation, stain2_threshold = Stain2.channel, Stain2.sign, Stain2.value
 
-    # try:
-    # Ensure model, scaler, and label encoder are loaded
-    if model is None:
-        print("No model found, attempting to load...")
-        model_dir = get_abs_path('model/statistics')
-        model_path = os.path.join(model_dir, 'trained_model.keras')
-        scaler_path = os.path.join(model_dir, 'scaler.pkl')
-        label_encoder_path = os.path.join(model_dir, 'label_encoder.pkl')
-        try:
-            model = load_model(model_path)
-            scaler = joblib.load(scaler_path)
-            label_encoder = joblib.load(label_encoder_path)
-            print("Model, scaler, and label encoder loaded successfully.")
-        except Exception as e:
-            print(f"Error loading model or preprocessing objects: {e}")
-            if gui:
-                from PyQt5.QtWidgets import QMessageBox
-                QMessageBox.warning(CellscannerGUI, "Error", "Please train the model before making a prediction.")
-            # return
-
-    else:
-        print(model.__dict__)
-
     # Predict the species in the coculture file
     predicted_classes, uncertainties,index_to_species, data_df = predict_species(
         data_df,
         model,
         scaler,
-        label_encoder
+        label_encoder,
+        scaling_constant
     )
 
     # Verify LabelEncoder classes
     print("LabelEncoder classes:", label_encoder.classes_)
 
     # Convert uncertainties to a Pandas Series
-    # TODO: data_df_pred to be passed in the CellscannerGUI
+    # TODO: data_df_pred to be passed in the PredictionPanel
     data_df_pred = data_df.copy()
     uncertainties = pd.Series(uncertainties, index=data_df_pred.index)
 
-
     # Save prediction results and plot the 3D scatter plot
-    output_dir = time_based_dir(prefix="Prediction", base_path=output_dir, multiple_cocultures=multiple_cocultures)
-    os.makedirs(output_dir, exist_ok=True)
     save_prediction_results(predicted_classes, uncertainties,
                             data_df_pred, index_to_species, output_dir,
                             x_axis_combo, y_axis_combo, z_axis_combo, sample)
 
     # Gating
     if gating:
-
         # Apply gating
         data_df_pred = apply_gating(data_df_pred,
                                     stain1, stain1_relation, stain1_threshold,
-                                    stain2, stain2_relation, stain2_threshold)
-
+                                    stain2, stain2_relation, stain2_threshold, scaling_constant)
         # Save gating results
         save_gating_results(data_df_pred, output_dir,
                             x_axis_combo, y_axis_combo, z_axis_combo)
-
         # Perform heterogeneity analysis
         filtered_data = data_df_pred[(data_df_pred['state'] == 'live') & (data_df_pred['predictions'] != 'background')]
 
@@ -146,24 +117,19 @@ def predict(CellscannerGUI=None, **kwargs):
         # Create and save heterogeneity plots
         save_heterogeneity_plots(hetero1, hetero2, output_dir)
 
-    if gui:
-        CellscannerGUI.data_df_pred = data_df_pred
-        CellscannerGUI.results_dir = output_dir
-        return CellscannerGUI
-
-    else:
+    if not gui:
         return data_df_pred
 
 
 # Functions to be used by the predict()
-def predict_species(data_df, model, scaler, label_encoder):
+def predict_species(data_df, model, scaler, label_encoder, scaling_constant):
 
     # Select only numeric columns
     numeric_cols = data_df.select_dtypes(include=[np.number]).columns
 
     # Apply arcsinh transformation only to numeric columns
     data_df_arcsinh = data_df.copy()
-    data_df_arcsinh[numeric_cols] = np.arcsinh(data_df_arcsinh[numeric_cols] / 150)
+    data_df_arcsinh[numeric_cols] = np.arcsinh(data_df_arcsinh[numeric_cols] / scaling_constant)
 
     # Z-standardization
     X_co_scaled = scaler.transform(data_df_arcsinh[numeric_cols])
@@ -183,7 +149,8 @@ def predict_species(data_df, model, scaler, label_encoder):
     return predicted_classes, uncertainties,index_to_species, data_df
 
 
-def apply_gating(data_df, stain1, stain1_relation, stain1_threshold, stain2=None, stain2_relation=None, stain2_threshold=None):
+def apply_gating(data_df, stain1, stain1_relation, stain1_threshold,
+                 stain2=None, stain2_relation=None, stain2_threshold=None, scaling_constant=150):
     # Copy the DataFrame to not change the original data
     gated_data_df = data_df.copy()
 
@@ -191,7 +158,7 @@ def apply_gating(data_df, stain1, stain1_relation, stain1_threshold, stain2=None
     predictions_column = gated_data_df.pop('predictions') if 'predictions' in gated_data_df.columns else None
 
     # Apply arcsinh transformation with a cofactor
-    cofactor = 150  # Cofactor
+    cofactor = scaling_constant  # Cofactor
 
     for column in gated_data_df.select_dtypes(include=[np.number]).columns:
         gated_data_df[column] = np.arcsinh(gated_data_df[column] / cofactor)
@@ -219,7 +186,8 @@ def apply_gating(data_df, stain1, stain1_relation, stain1_threshold, stain2=None
     return gated_data_df
 
 
-def save_prediction_results(predicted_classes, uncertainties, data_df, index_to_species, output_dir, x_axis, y_axis, z_axis, sample=None):
+def save_prediction_results(predicted_classes, uncertainties, data_df, index_to_species, output_dir,
+                            x_axis, y_axis, z_axis, sample=None, scaling_constant=150):
     # Ensure `data_df` is still a DataFrame and not an ndarray
     if not isinstance(data_df, pd.DataFrame):
         raise ValueError("Expected a DataFrame for `data_df`, but got something else.")
@@ -263,7 +231,7 @@ def save_prediction_results(predicted_classes, uncertainties, data_df, index_to_
 
     # Perform arcsinh transformation on numeric columns
     coculture_data_numeric = data_df.drop(columns=['predictions', 'uncertainties'])
-    coculture_data_arcsin = np.arcsinh(coculture_data_numeric / 150)
+    coculture_data_arcsin = np.arcsinh(coculture_data_numeric / scaling_constant)
 
     # Reintegrate 'predictions' and 'uncertainties' columns
     coculture_data_arcsin['predictions'] = data_df['predictions']
@@ -487,3 +455,15 @@ def merge_prediction_results(output_dir, prediction_type):
     merged_filename = "".join(["merged_", pattern, ".csv"])
     merged_file = os.path.join(output_dir, merged_filename)
     result.to_csv(merged_file, index=False)
+
+
+def get_model_components(panel):
+    """
+    Helper function to retrieve model, scaler, label encoder, and scaling constant from a panel.
+    """
+    model = getattr(panel, "model", None)
+    scaler = getattr(panel, "scaler", None)
+    label_encoder = getattr(panel, "le", None)
+    scaling_constant = getattr(panel, "scaling_constant", None)
+    scaling_constant_value = scaling_constant.value() if scaling_constant else None
+    return model, scaler, label_encoder, scaling_constant_value
