@@ -47,6 +47,10 @@ class ImportFilePanel(QWidget):
         self.species_widgets = []
         self.species_files = {}  # A dictionary to store species and their corresponding files
 
+        self.file_types = "Flow Cytometry Files (*.fcs);;All Files (*)"
+        self.select_blanks_message = ["Select Blank Files", "", self.file_types]
+
+
         # Blank Files Selection
         blank_layout = QHBoxLayout()
         self.blank_button = QPushButton("Select Blank Files (.fcs)", self)
@@ -63,13 +67,7 @@ class ImportFilePanel(QWidget):
         self.blank_files = []
 
         # Button to add a new species selection
-        species_layout = QHBoxLayout()
-        self.add_species_button = QPushButton("Add Species", self)
-        self.add_species_button.setStyleSheet(button_style())
-        self.add_species_button.setToolTip("You may add one or several .fcs files for the same species.")
-        self.add_species_button.clicked.connect(self.add_species)
-        species_layout.addWidget(self.add_species_button)
-        self.layout.addLayout(species_layout)
+        self.init_species_layout()
 
         # Previously trained model button
         self.previously_trained_model_button = QPushButton("Add Model", self)
@@ -132,8 +130,8 @@ class ImportFilePanel(QWidget):
 
     def select_species_files(self, species_button):
         """Select species files and update the species name field."""
-        file_types = "Flow Cytometry Files (*.fcs);;All Files (*)"
-        file_types_message = ["Select Species Files", "", file_types]
+
+        file_types_message = ["Select Species Files", "", self.file_types]
         original_files, _ = QFileDialog.getOpenFileNames(self, *file_types_message)
 
         if original_files:
@@ -172,12 +170,12 @@ class ImportFilePanel(QWidget):
                 if button == species_button:
                     name_display.setText("Species Name")
 
+        print("Species (monoculture) files:", self.species_files)
+
 
     def select_blank_files(self):
         """Select blank files and copy them to the working directory."""
-        file_types = "Flow Cytometry Files (*.fcs);;All Files (*)"
-        select_blanks_message = ["Select Blank Files", "", file_types]
-        original_files, _ = QFileDialog.getOpenFileNames(self, *select_blanks_message)
+        original_files, _ = QFileDialog.getOpenFileNames(self, *self.select_blanks_message)
         if original_files:
             print("Blanks:", original_files)
             blank_files = []
@@ -197,7 +195,7 @@ class ImportFilePanel(QWidget):
             self.blank_button.setText(",".join([os.path.basename(x) for x in self.blank_files]))
         else:
             print(self.blank_files)
-            self.blank_button.setText(" ".join([select_blanks_message[0], "(.fcs)"]))
+            self.blank_button.setText(" ".join([self.select_blanks_message[0], "(.fcs)"]))
 
 
     def select_directory(self):
@@ -246,3 +244,15 @@ class ImportFilePanel(QWidget):
         self.model_loaded = True if self.model is not None else False
         self.scaling_constant_label.setVisible(self.model_loaded)
         self.scaling_constant.setVisible(self.model_loaded)
+
+
+    def init_species_layout(self):
+        self.species_layout = QHBoxLayout()
+        self.add_species_button = QPushButton("Add Species", self)
+        self.add_species_button.setStyleSheet(button_style())
+        self.add_species_button.setToolTip("You may add one or several .fcs files for the same species.")
+        self.add_species_button.clicked.connect(self.add_species)
+        self.species_layout.addWidget(self.add_species_button)
+        self.layout.addLayout(self.species_layout)
+
+

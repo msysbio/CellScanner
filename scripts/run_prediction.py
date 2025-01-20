@@ -251,7 +251,7 @@ def save_prediction_results(predicted_classes, uncertainties, data_df, index_to_
 
     # Adjust the layout for species plot
     fig_species.update_layout(width=1500, height=1000)
-    fig_species.update_traces(marker=dict(size=1, opacity=0.8))
+    fig_species.update_traces(marker=dict(size=5, opacity=0.8))
 
     # Save the species plot as an HTML file
     fig_species.write_html(plot_path_species)
@@ -295,7 +295,7 @@ def save_prediction_results(predicted_classes, uncertainties, data_df, index_to_
         )
     )
 
-    fig_uncertainty.update_traces(marker=dict(size=1, opacity=0.8))  # Adjust marker size and opacity
+    fig_uncertainty.update_traces(marker=dict(size=5, opacity=0.8))  # Adjust marker size and opacity
 
     # Save the uncertainty plot as an HTML file
     fig_uncertainty.write_html(plot_path_uncertainty)

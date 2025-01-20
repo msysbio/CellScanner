@@ -135,7 +135,6 @@ class TrainModelPanel(QWidget):
 
         nn_layout.addLayout(scaling_constant_layout)
 
-
         # Add the NN group box to the main layout
         self.layout.addWidget(self.nn_group)
 
