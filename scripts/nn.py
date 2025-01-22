@@ -106,6 +106,12 @@ def train_neural_network(TrainPanel=None, **kwargs):
         y_pred_classes = np.argmax(y_pred, axis=1)
         y_true_classes = np.argmax(y_val, axis=1)
 
+        print("===========")
+        print(y_pred)
+        print("===========")
+        print(y_pred_classes)
+        print("===========")
+
         conf_matrix = confusion_matrix(y_true_classes, y_pred_classes)
         class_report_dict = classification_report(
             y_true_classes, y_pred_classes,

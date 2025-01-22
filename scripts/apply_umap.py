@@ -84,8 +84,6 @@ def process_files(TrainPanel=None, **kwargs):
 
     # Combine data
     combined_df = pd.concat([df for species_dataframes in all_species_dataframes for df in species_dataframes] + blank_dataframes)
-    print("Species names included in combined data:")
-    print(combined_df['Species'].unique())
 
     columns_to_plot = combined_df.columns.difference(['Species']).tolist()
     data_subset = combined_df[columns_to_plot].values
@@ -120,7 +118,7 @@ def process_files(TrainPanel=None, **kwargs):
         },
 
     )
-    fig_before.update_traces(marker=dict(size=1))
+    fig_before.update_traces(marker=dict(size=5))
 
     # Define the path to save the plot
     model_dir = os.path.join(working_directory, "model")  # get_abs_path('model/statistics')
@@ -165,7 +163,7 @@ def process_files(TrainPanel=None, **kwargs):
         },
 
     )
-    fig_after.update_traces(marker=dict(size=1))
+    fig_after.update_traces(marker=dict(size=5))
 
     umap_after_path = os.path.join(model_dir, 'umap_after_filtering.html')
     fig_after.write_html(umap_after_path)
@@ -180,7 +178,3 @@ def process_files(TrainPanel=None, **kwargs):
 
     return cleaned_data
 
-    # # TODO: If user chooses to keep the training data, save it
-    # train_dir = get_abs_path('model')
-    # output_dir = get_output_dir()
-    # shutil.copytree(train_dir, output_dir)
