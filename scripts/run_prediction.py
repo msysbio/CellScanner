@@ -130,6 +130,11 @@ def predict(PredictionPanel=None, **kwargs):
 
         # Perform heterogeneity analysis
         hetero_df = gating_df[(gating_df['state'] == 'live') & (gating_df['predictions'] != 'background')]
+        print("\n\n==================== Heterogeneity Analysis ====================")
+        print("data_df_pred", data_df_pred.shape)
+        print("gating_df:", gating_df.shape)
+        print("hetero_df:", hetero_df.shape)
+        print("\n\n==================== Heterogeneity Analysis ====================")
     else:
         hetero_df = data_df_pred.copy()
 
@@ -144,8 +149,13 @@ def predict(PredictionPanel=None, **kwargs):
     hetero_df.iloc[:, :-2] = np.log(hetero_df.iloc[:, :-2])
 
     # Compute heterogeneity measures
-    hetero1 = hetero_simple(hetero_df.iloc[:, :-2])
-    hetero2 = hetero_mini_batch(hetero_df.iloc[:, :-2])
+    try:
+        hetero1 = hetero_simple(hetero_df.iloc[:, :-2])
+        hetero2 = hetero_mini_batch(hetero_df.iloc[:, :-2])
+    except ValueError as e:
+        raise ValueError("Error calculating heterogeneity.") from e
+
+
 
     # Create and save heterogeneity plots
     save_heterogeneity_plots(hetero1, hetero2, output_dir, sample)
@@ -211,6 +221,21 @@ def apply_gating(data_df,
         gated_data_df.loc[gated_data_df[stain1] > stain1_threshold, 'state'] = 'inactive'
     elif stain1_relation == '<':
         gated_data_df.loc[gated_data_df[stain1] < stain1_threshold, 'state'] = 'inactive'
+
+    state_counts = gated_data_df['state'].value_counts()
+
+    # Check if both "live" and "inactive" labels are non-zero
+    if 'live' in state_counts and 'inactive' in state_counts and state_counts['live'] > 0 and state_counts['inactive'] > 0:
+        print("Both 'live' and 'inactive' labels are non-zero.")
+        valid_gating = True
+    else:
+        print("One or both labels are zero.")
+        valid_gating = False
+    if not valid_gating:
+        stain_min, stain_max = np.min(gated_data_df[stain1]), np.max(gated_data_df[stain1])
+        raise ValueError(
+            f"Invalid gating. Please check the gating thresholds. Stain ranges between {stain_min} and {stain_max}"
+        )
 
     # Apply gating based on the second stain (debris)
     if stain2 and stain2_threshold:
@@ -359,7 +384,10 @@ def save_gating_results(gated_data_df, output_dir, sample, x_axis, y_axis, z_axi
     states = gated_data_df['state'].unique()
 
     # Color map
-    state_colors = {'live': 'skyblue', 'inactive': 'firebrick', 'debris': 'darkslategrey'}
+    state_colors = {'live': 'skyblue',
+                    'inactive': 'firebrick',
+                    'debris': 'darkslategrey'
+    }
 
     # Plot each combination of state and prediction
     for state in states:
@@ -415,7 +443,13 @@ def hetero_simple(data):
 
 def hetero_mini_batch(data, type='av_diss'):
     # Use MiniBatchKMeans as an alternative
-    kmeans = MiniBatchKMeans(n_clusters=1, batch_size=3080, n_init=3).fit(data)
+    try:
+        kmeans = MiniBatchKMeans(n_clusters=1, batch_size=3080, n_init=3).fit(data)
+    except ValueError:
+        raise ValueError(
+            "MiniBatchKMeans failed to fit the data."
+            ""
+        )
     if type == 'diameter':
         # Uses np.max()
         result = np.max(pairwise_distances(kmeans.cluster_centers_[0].reshape(1, -1), data))
@@ -432,7 +466,7 @@ def save_heterogeneity_plots(hetero1, hetero2, output_dir, sample):
     os.makedirs(heterogeneity_dir, exist_ok=True)
 
     # Values corresponding to each measure
-    sizes = [hetero1, hetero2]
+    metrics_data = [hetero1, hetero2]
     labels = ['Simple Heterogeneity', 'Medoid Heterogeneity']
     colors = ['#ff9999', '#66b3ff']
 
@@ -441,7 +475,7 @@ def save_heterogeneity_plots(hetero1, hetero2, output_dir, sample):
     plot_height = 600
 
     # Pie chart
-    fig1 = go.Figure(data=[go.Pie(labels=labels, values=sizes, marker_colors=colors, hole=.3)])
+    fig1 = go.Figure(data=[go.Pie(labels=labels, values=metrics_data, marker_colors=colors, hole=.3)])
     fig1.update_layout(title_text='Heterogeneity of the Sample',width=plot_width,
         height=plot_height)
     pie_chart_path = os.path.join(
@@ -451,7 +485,7 @@ def save_heterogeneity_plots(hetero1, hetero2, output_dir, sample):
     print(f"Pie chart saved to: {pie_chart_path}")
 
     # Bar chart
-    fig2 = go.Figure(data=[go.Bar(x=labels, y=sizes, marker_color=['blue', 'green'])])
+    fig2 = go.Figure(data=[go.Bar(x=labels, y=metrics_data, marker_color=['blue', 'green'])])
     fig2.update_layout(
         title='Comparison of Heterogeneity Measures',
         xaxis_title='Heterogeneity Measure',
@@ -465,6 +499,9 @@ def save_heterogeneity_plots(hetero1, hetero2, output_dir, sample):
     )
     fig2.write_html(bar_chart_path)
     print(f"Bar chart saved to: {bar_chart_path}")
+
+    for metric in metrics_data:
+        print(f"Heterogeneity {metric} is of type: {type(metric)}")
 
 
 def merge_prediction_results(output_dir, prediction_type):

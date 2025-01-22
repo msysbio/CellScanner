@@ -158,6 +158,8 @@ class PredictionPanel(QWidget):
             self.thread = QThread()
             self.worker = WorkerPredict(PredictPanel=self)
             self.worker.moveToThread(self.thread)
+            self.worker.error_signal.connect(self.on_error)
+
             self.thread.started.connect(self.worker.run_predict)
 
             # Apply UMAP & train neural network
@@ -260,6 +262,7 @@ class PredictionPanel(QWidget):
 class WorkerPredict(QObject):
 
     finished_signal = pyqtSignal()  # Define a signal for completion
+    error_signal = pyqtSignal(str)
 
     def __init__(self, PredictPanel=None):
         super().__init__()
@@ -271,9 +274,11 @@ class WorkerPredict(QObject):
         multiple_cocultures = True if self.PredictPanel.samples_number > 1 else False
 
         # Get output directory for the predictions
-        self.PredictPanel.predict_dir = time_based_dir(prefix="Prediction",
-                                          base_path=self.PredictPanel.file_panel.output_dir,
-                                          multiple_cocultures=multiple_cocultures)
+        self.PredictPanel.predict_dir = time_based_dir(
+            prefix="Prediction",
+            base_path=self.PredictPanel.file_panel.output_dir,
+            multiple_cocultures=multiple_cocultures
+        )
         os.makedirs(self.PredictPanel.predict_dir, exist_ok=True)
 
         # Loop over the coculture files and run predict()
@@ -284,7 +289,10 @@ class WorkerPredict(QObject):
             self.PredictPanel.sample = sample
 
             # Run predict() for a single sample
-            predict(self.PredictPanel)
+            try:
+                predict(self.PredictPanel)
+            except Exception as e:
+                self.error_signal.emit(f"Error during prediction: {str(e)}")
 
         # Merge predictions in case of multiple coculture files
         if multiple_cocultures:
@@ -296,4 +304,7 @@ class WorkerPredict(QObject):
             merge_prediction_results(self.PredictPanel.predict_dir, "uncertainty")
 
         self.finished_signal.emit()  # Emit the finished signal when done
+
+
+
 
