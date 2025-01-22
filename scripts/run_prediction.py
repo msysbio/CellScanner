@@ -13,8 +13,6 @@ from tensorflow.keras.models import load_model
 import plotly.express as px
 import plotly.graph_objects as go
 
-from .helpers import get_abs_path
-
 
 # Main function to be called from the worker
 def predict(PredictionPanel=None, **kwargs):
@@ -85,51 +83,75 @@ def predict(PredictionPanel=None, **kwargs):
     data_df_pred = data_df.copy()
     uncertainties = pd.Series(uncertainties, index=data_df_pred.index)
 
+    # Drop the 'Time' column if it exists
+    if 'Time' in data_df_pred.columns:
+        data_df_pred = data_df_pred.drop(columns=['Time'])
+
+    # Map prediction indices back to species names
+    mapped_predictions = np.vectorize(index_to_species.get)(predicted_classes)
+
+    # Add predictions and uncertainties to the coculture data
+    data_df_pred['predictions'] = mapped_predictions
+    uncertainties = pd.Series(uncertainties, index=data_df_pred.index)  # Ensure uncertainties is a Series with the same index
+    data_df_pred['uncertainties'] = uncertainties
+
+    # Filter out predictions of high entropy
+    if filter_out_uncertain:
+        if uncertainty_threshold < 0 or uncertainty_threshold > 1:
+            raise ValueError("Uncertainty threshold must be between 0 and 1.")
+        number_of_classes = len(set(index_to_species.values()))
+        max_entropy = math.log(number_of_classes)
+        print("Data shape before filtering", data_df_pred.shape)
+        print("threshold=", uncertainty_threshold)
+        data_df_pred = data_df_pred[data_df_pred['uncertainties'] / math.log(number_of_classes) <= uncertainty_threshold * max_entropy]
+        print("Data shape after filtering for entropy", data_df_pred.shape)
+
     # Save prediction results and plot the 3D scatter plot
-    df = save_prediction_results(
-        predicted_classes,
-        uncertainties,
+    save_prediction_results(
         data_df_pred,
         index_to_species,
         output_dir,
         x_axis_combo, y_axis_combo, z_axis_combo,
         sample=sample,
         scaling_constant=scaling_constant,
-        filter_out_uncertain=filter_out_uncertain,
-        uncertainty_threshold=uncertainty_threshold
     )
 
     # Gating
     if gating:
         # Apply gating
-        data_df_pred = apply_gating(data_df_pred,
-                                    stain1, stain1_relation, stain1_threshold,
-                                    stain2, stain2_relation, stain2_threshold, scaling_constant)
+        gating_df = apply_gating(data_df_pred,
+            stain1, stain1_relation, stain1_threshold,
+            stain2, stain2_relation, stain2_threshold, scaling_constant
+        )
         # Save gating results
-        save_gating_results(data_df_pred, output_dir,
-                            x_axis_combo, y_axis_combo, z_axis_combo)
+        save_gating_results(gating_df, output_dir, sample,
+            x_axis_combo, y_axis_combo, z_axis_combo
+        )
+
         # Perform heterogeneity analysis
-        filtered_data = data_df_pred[(data_df_pred['state'] == 'live') & (data_df_pred['predictions'] != 'background')]
+        hetero_df = gating_df[(gating_df['state'] == 'live') & (gating_df['predictions'] != 'background')]
+    else:
+        hetero_df = data_df_pred.copy()
 
-        # Check and correct negative entries
-        for col in filtered_data.columns[:-2]:
-            min_val = filtered_data[col].min()
-            if min_val < 0:
-                filtered_data[col] = filtered_data[col] - min_val
+    # Check and correct negative entries
+    for col in hetero_df.columns[:-2]:
+        min_val = hetero_df[col].min()
+        if min_val < 0:
+            hetero_df[col] = hetero_df[col] - min_val
 
-        # Log transformation, handle zero values
-        filtered_data.iloc[:, :-2] = filtered_data.iloc[:, :-2].replace(0, 1)
-        filtered_data.iloc[:, :-2] = np.log(filtered_data.iloc[:, :-2])
+    # Log transformation, handle zero values
+    hetero_df.iloc[:, :-2] = hetero_df.iloc[:, :-2].replace(0, 1)
+    hetero_df.iloc[:, :-2] = np.log(hetero_df.iloc[:, :-2])
 
-        # Compute heterogeneity measures
-        hetero1 = hetero_simple(filtered_data.iloc[:, :-2])
-        hetero2 = hetero_mini_batch(filtered_data.iloc[:, :-2])
+    # Compute heterogeneity measures
+    hetero1 = hetero_simple(hetero_df.iloc[:, :-2])
+    hetero2 = hetero_mini_batch(hetero_df.iloc[:, :-2])
 
-        # Create and save heterogeneity plots
-        save_heterogeneity_plots(hetero1, hetero2, output_dir)
+    # Create and save heterogeneity plots
+    save_heterogeneity_plots(hetero1, hetero2, output_dir, sample)
 
     if not gui:
-        return df
+        return data_df_pred
 
 
 # Functions to be used by the predict()
@@ -160,8 +182,11 @@ def predict_species(data_df, model, scaler, label_encoder, scaling_constant):
     return predicted_classes, uncertainties, index_to_species, data_df
 
 
-def apply_gating(data_df, stain1, stain1_relation, stain1_threshold,
-                 stain2=None, stain2_relation=None, stain2_threshold=None, scaling_constant=150):
+def apply_gating(data_df,
+                 stain1, stain1_relation, stain1_threshold,
+                 stain2=None, stain2_relation=None, stain2_threshold=None,
+                 scaling_constant=150
+    ):
     # Copy the DataFrame to not change the original data
     gated_data_df = data_df.copy()
 
@@ -197,47 +222,18 @@ def apply_gating(data_df, stain1, stain1_relation, stain1_threshold,
     return gated_data_df
 
 
-def save_prediction_results(predicted_classes: np.ndarray,
-                            uncertainties: np.array,
-                            data_df: pd.DataFrame,
+def save_prediction_results(data_df: pd.DataFrame,
                             index_to_species: Dict,
                             output_dir: str,
                             x_axis, y_axis, z_axis,
                             sample: str = None,
-                            scaling_constant: int = 150,
-                            filter_out_uncertain: bool = False,
-                            uncertainty_threshold: float = 0.5
+                            scaling_constant: int = 150
     ):
     # Ensure `data_df` is still a DataFrame and not an ndarray
     if not isinstance(data_df, pd.DataFrame):
         raise ValueError("Expected a DataFrame for `data_df`, but got something else.")
 
-    # Drop the 'Time' column if it exists
-    if 'Time' in data_df.columns:
-        data_df = data_df.drop(columns=['Time'])
-
-    # Map prediction indices back to species names
-    mapped_predictions = np.vectorize(index_to_species.get)(predicted_classes)
-
-    # Add predictions and uncertainties to the coculture data
-    data_df['predictions'] = mapped_predictions
-    uncertainties = pd.Series(uncertainties, index=data_df.index)  # Ensure uncertainties is a Series with the same index
-    data_df['uncertainties'] = uncertainties
-
-    # Filter out predictions of high entropy
-    if filter_out_uncertain:
-        if uncertainty_threshold < 0 or uncertainty_threshold > 1:
-            raise ValueError("Uncertainty threshold must be between 0 and 1.")
-        number_of_classes = len(set(index_to_species.values()))
-        max_entropy = math.log(number_of_classes)
-        print("Data shape before filtering", data_df.shape)
-        print("threshold=", uncertainty_threshold)
-        data_df = data_df[data_df['uncertainties'] / math.log(number_of_classes) <= uncertainty_threshold * max_entropy]
-        print("Data shape after filtering for entropy", data_df.shape)
-
-    # Save the prediction counts to a CSV file
-    prediction_counts = data_df['predictions'].value_counts()
-
+    # Create filenames for the prediction counts and uncertainties CSV and html files
     if sample is not None:
         outfile_predictions = os.path.join(output_dir, "_".join([sample, 'prediction_counts.csv']))
         outfile_uncertainties = os.path.join(output_dir, "_".join([sample, "uncertainty_counts.csv"]))
@@ -249,6 +245,8 @@ def save_prediction_results(predicted_classes: np.ndarray,
         plot_path_species = os.path.join(output_dir, '3D_coculture_predictions_species.html')
         plot_path_uncertainty = os.path.join(output_dir, '3D_coculture_predictions_uncertainty.html')
 
+    # Save the prediction counts to a CSV file
+    prediction_counts = data_df['predictions'].value_counts()
     prediction_counts.to_csv(outfile_predictions)
     print("Prediction counts saved to:", outfile_predictions)
 
@@ -331,10 +329,10 @@ def save_prediction_results(predicted_classes: np.ndarray,
     # Save the uncertainty plot as an HTML file
     fig_uncertainty.write_html(plot_path_uncertainty)
     print("3D scatter plot (Uncertainty) saved to:", plot_path_uncertainty)
-    return data_df
+    # return data_df
 
 
-def save_gating_results(gated_data_df, output_dir, x_axis, y_axis, z_axis):
+def save_gating_results(gated_data_df, output_dir, sample, x_axis, y_axis, z_axis):
     # Create a directory for gating results
     gated_dir = os.path.join(output_dir, 'gated')
     os.makedirs(gated_dir, exist_ok=True)
@@ -350,7 +348,9 @@ def save_gating_results(gated_data_df, output_dir, x_axis, y_axis, z_axis):
         combined_counts_df = pd.concat([combined_counts_df, state_counts], axis=1)
 
     # Save the combined state counts to a single CSV file
-    combined_counts_df.to_csv(os.path.join(gated_dir, 'combined_state_counts.csv'))
+    combined_counts_df.to_csv(
+        os.path.join(gated_dir, "_".join([sample,'combined_state_counts.csv']))
+    )
 
     # 3D plot creation for gated data
     fig = go.Figure()
@@ -400,7 +400,9 @@ def save_gating_results(gated_data_df, output_dir, x_axis, y_axis, z_axis):
     )
 
     # Save the gated 3D plot as an HTML file
-    plot_path = os.path.join(gated_dir, '3D_Gating_predictions_coculture.html')
+    plot_path = os.path.join(
+        gated_dir, "_".join([sample,'3D_Gating_predictions_coculture.html'])
+    )
     fig.write_html(plot_path)
     print("3D scatter plot for gated data saved to:", plot_path)
 
@@ -408,20 +410,22 @@ def save_gating_results(gated_data_df, output_dir, x_axis, y_axis, z_axis):
 def hetero_simple(data):
     # Calculate simple heterogeneity as the sum of mean ranges across all channels.
     ranges = data.apply(np.ptp, axis=0)
-    return np.sum(ranges.mean())
-
+    # return np.sum(ranges.mean())
+    return ranges.mean()
 
 def hetero_mini_batch(data, type='av_diss'):
     # Use MiniBatchKMeans as an alternative
     kmeans = MiniBatchKMeans(n_clusters=1, batch_size=3080, n_init=3).fit(data)
     if type == 'diameter':
+        # Uses np.max()
         result = np.max(pairwise_distances(kmeans.cluster_centers_[0].reshape(1, -1), data))
     elif type == 'av_diss':
+        # Uses np.mean()
         result = np.mean(pairwise_distances(kmeans.cluster_centers_[0].reshape(1, -1), data))
     return result
 
 
-def save_heterogeneity_plots(hetero1, hetero2, output_dir):
+def save_heterogeneity_plots(hetero1, hetero2, output_dir, sample):
 
     # Create a directory for heterogeneity results
     heterogeneity_dir = os.path.join(output_dir, 'heterogeneity_results')
@@ -440,7 +444,9 @@ def save_heterogeneity_plots(hetero1, hetero2, output_dir):
     fig1 = go.Figure(data=[go.Pie(labels=labels, values=sizes, marker_colors=colors, hole=.3)])
     fig1.update_layout(title_text='Heterogeneity of the Sample',width=plot_width,
         height=plot_height)
-    pie_chart_path = os.path.join(heterogeneity_dir, 'heterogeneity_pie_chart.html')
+    pie_chart_path = os.path.join(
+        heterogeneity_dir, "_".join([sample, 'heterogeneity_pie_chart.html'])
+    )
     fig1.write_html(pie_chart_path)
     print(f"Pie chart saved to: {pie_chart_path}")
 
@@ -454,7 +460,9 @@ def save_heterogeneity_plots(hetero1, hetero2, output_dir):
         width=plot_width,
         height=plot_height)
 
-    bar_chart_path = os.path.join(heterogeneity_dir, 'heterogeneity_bar_chart.html')
+    bar_chart_path = os.path.join(
+        heterogeneity_dir, "_".join([sample,'heterogeneity_bar_chart.html'])
+    )
     fig2.write_html(bar_chart_path)
     print(f"Bar chart saved to: {bar_chart_path}")
 
