@@ -1,7 +1,8 @@
 import os
-import joblib
+import math
 import numpy as np
 import pandas as pd
+from typing import Dict
 
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics import pairwise_distances
@@ -37,6 +38,9 @@ def predict(PredictionPanel=None, **kwargs):
         gating = PredictionPanel.gating_checkbox.isChecked()
         sample = PredictionPanel.sample
 
+        filter_out_uncertain = PredictionPanel.uncertainty_filtering_checkbox.isChecked()
+        uncertainty_threshold = float(PredictionPanel.uncertainty_threshold.value()) if filter_out_uncertain else None
+
         if gating:
             # Stain 1
             stain1 = PredictionPanel.stain1_combo.currentText()  # It should be the column name
@@ -60,6 +64,8 @@ def predict(PredictionPanel=None, **kwargs):
         z_axis_combo = kwargs["z_axis_combo"]
         gating = kwargs["gating"]
         scaling_constant = kwargs["scaling_constant"]
+        filter_out_uncertain = kwargs["filter_out_uncertain"]
+        uncertainty_threshold = kwargs["uncertainty_threshold"]
         if gating:
             Stain1 = kwargs["stain1"]
             stain1, stain1_relation, stain1_threshold = Stain1.channel, Stain1.sign, Stain1.value
@@ -67,7 +73,7 @@ def predict(PredictionPanel=None, **kwargs):
             stain2, stain2_relation, stain2_threshold = Stain2.channel, Stain2.sign, Stain2.value
 
     # Predict the species in the coculture file
-    predicted_classes, uncertainties,index_to_species, data_df = predict_species(
+    predicted_classes, uncertainties, index_to_species, data_df = predict_species(
         data_df,
         model,
         scaler,
@@ -75,18 +81,23 @@ def predict(PredictionPanel=None, **kwargs):
         scaling_constant
     )
 
-    # Verify LabelEncoder classes
-    print("LabelEncoder classes:", label_encoder.classes_)
-
     # Convert uncertainties to a Pandas Series
-    # TODO: data_df_pred to be passed in the PredictionPanel
     data_df_pred = data_df.copy()
     uncertainties = pd.Series(uncertainties, index=data_df_pred.index)
 
     # Save prediction results and plot the 3D scatter plot
-    save_prediction_results(predicted_classes, uncertainties,
-                            data_df_pred, index_to_species, output_dir,
-                            x_axis_combo, y_axis_combo, z_axis_combo, sample)
+    df = save_prediction_results(
+        predicted_classes,
+        uncertainties,
+        data_df_pred,
+        index_to_species,
+        output_dir,
+        x_axis_combo, y_axis_combo, z_axis_combo,
+        sample=sample,
+        scaling_constant=scaling_constant,
+        filter_out_uncertain=filter_out_uncertain,
+        uncertainty_threshold=uncertainty_threshold
+    )
 
     # Gating
     if gating:
@@ -118,7 +129,7 @@ def predict(PredictionPanel=None, **kwargs):
         save_heterogeneity_plots(hetero1, hetero2, output_dir)
 
     if not gui:
-        return data_df_pred
+        return df
 
 
 # Functions to be used by the predict()
@@ -140,13 +151,13 @@ def predict_species(data_df, model, scaler, label_encoder, scaling_constant):
     # Convert predictions to class labels
     predicted_classes = np.argmax(predictions, axis=1)
 
-    # Calculate entropy for each prediction to represent uncertainty
+    # Calculate entropy for each prediction to represent uncertainty (using scipy.stats.entropy)
     uncertainties = entropy(predictions, axis=1)
 
     # Create the index-to-species mapping dictionary
     index_to_species = {index: label for index, label in enumerate(label_encoder.classes_)}
 
-    return predicted_classes, uncertainties,index_to_species, data_df
+    return predicted_classes, uncertainties, index_to_species, data_df
 
 
 def apply_gating(data_df, stain1, stain1_relation, stain1_threshold,
@@ -186,8 +197,17 @@ def apply_gating(data_df, stain1, stain1_relation, stain1_threshold,
     return gated_data_df
 
 
-def save_prediction_results(predicted_classes, uncertainties, data_df, index_to_species, output_dir,
-                            x_axis, y_axis, z_axis, sample=None, scaling_constant=150):
+def save_prediction_results(predicted_classes: np.ndarray,
+                            uncertainties: np.array,
+                            data_df: pd.DataFrame,
+                            index_to_species: Dict,
+                            output_dir: str,
+                            x_axis, y_axis, z_axis,
+                            sample: str = None,
+                            scaling_constant: int = 150,
+                            filter_out_uncertain: bool = False,
+                            uncertainty_threshold: float = 0.5
+    ):
     # Ensure `data_df` is still a DataFrame and not an ndarray
     if not isinstance(data_df, pd.DataFrame):
         raise ValueError("Expected a DataFrame for `data_df`, but got something else.")
@@ -203,6 +223,17 @@ def save_prediction_results(predicted_classes, uncertainties, data_df, index_to_
     data_df['predictions'] = mapped_predictions
     uncertainties = pd.Series(uncertainties, index=data_df.index)  # Ensure uncertainties is a Series with the same index
     data_df['uncertainties'] = uncertainties
+
+    # Filter out predictions of high entropy
+    if filter_out_uncertain:
+        if uncertainty_threshold < 0 or uncertainty_threshold > 1:
+            raise ValueError("Uncertainty threshold must be between 0 and 1.")
+        number_of_classes = len(set(index_to_species.values()))
+        max_entropy = math.log(number_of_classes)
+        print("Data shape before filtering", data_df.shape)
+        print("threshold=", uncertainty_threshold)
+        data_df = data_df[data_df['uncertainties'] / math.log(number_of_classes) <= uncertainty_threshold * max_entropy]
+        print("Data shape after filtering for entropy", data_df.shape)
 
     # Save the prediction counts to a CSV file
     prediction_counts = data_df['predictions'].value_counts()
@@ -300,6 +331,7 @@ def save_prediction_results(predicted_classes, uncertainties, data_df, index_to_
     # Save the uncertainty plot as an HTML file
     fig_uncertainty.write_html(plot_path_uncertainty)
     print("3D scatter plot (Uncertainty) saved to:", plot_path_uncertainty)
+    return data_df
 
 
 def save_gating_results(gated_data_df, output_dir, x_axis, y_axis, z_axis):

@@ -197,6 +197,21 @@ z_axis:
     The third channel of the coculture data to be used in the 3D plot.
   type: str
 
+filter_out_uncertain:
+  value: false
+  threshold: 0.5
+  required: false
+  default: false
+  description: >
+    Set whether you wish to filter out uncertain predictions. 
+    If you wish so, then please provide also a threshold of your choice. 
+    CellScanner will compute the number of classes and this threshold will be used 
+    to filter out predictions with an entropy higher than the threshold*max_entropy
+    where max entropy equals to log(number_of_classes).
+    By default, the threshold is set to 0.5.
+    Thus, the lower the threshold, the stricter the filtering, the more uncertain predictions will be filtered out.
+  type: bool
+
 # ---------------------
 # Gating parameters
 # ---------------------
