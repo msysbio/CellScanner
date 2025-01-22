@@ -163,7 +163,7 @@ class CellScannerCLI():
                 })
 
             # Call predict function; df is the prediction dataframe after entropy filtering if step is applied
-            df = predict(**predict_params)
+            predict(**predict_params)
 
         if multiple_cocultures:
 
@@ -280,8 +280,8 @@ def get_stain_params(stain, conf):
     if not all([channel, sign, value]) and stain=="stain1":
         missing = [k for k, v in {"channel": channel, "sign": sign, "value": value}.items() if v is None]
         raise ValueError(f"Please provide {' and '.join(missing)} for {stain}.")
-    elif not all([channel]):
-        missing = [k for k, v in {"channel": channel, "sign": sign, "value": value}.items() if v is None]
+    if stain=="stain2" and channel is not None:
+        missing = [k for k, v in {"sign": sign, "value": value}.items() if v is None]
         raise ValueError(f"Please provide {' and '.join(missing)} for {stain}.")
 
     return Stain(channel, sign, value)

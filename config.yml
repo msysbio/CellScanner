@@ -244,16 +244,16 @@ stain1:
     - value: int
 
 stain2:
-  channel: cherry
+  channel:
   sign:
-    values_from:
-      - higher_than
-      - lower_than
+  sign_values:
+    - higher_than
+    - lower_than
   value:
   required: false
   description: >
-    This parameter is required only when gating has been asked.
-    In that case, you need to provide 3 parameters to describe your stain:
+    This parameter is optional even when gating has been asked, and it stands for debris.
+    Like in the `stain1` case, you need to provide 3 parameters to describe your stain:
     The `channel`, that takes values the exact name of a column in the coculture file 
     The `sign`, that can be either higher_than or lower_than, mentioning whether the channel 
     needs to have either a higher or a lower value from the one you are about to set. 
