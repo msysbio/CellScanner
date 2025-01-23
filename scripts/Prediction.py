@@ -79,14 +79,18 @@ class PredictionPanel(QWidget):
         self.predict_panel_layout.addLayout(self.z_axis_layout)
 
         # Add a checkbox to apply gating
-        self.gating_checkbox = QCheckBox("Apply Gating for Live/Dead or Debris", self)
+        self.gating_checkbox = QCheckBox("Apply line gating", self)
         self.gating_checkbox.stateChanged.connect(self.toggle_gating_options)
         self.predict_panel_layout.addWidget(self.gating_checkbox)
 
         # Stain 1 selection (for live/dead)
         self.stain1_layout = QHBoxLayout()
-        self.stain1_label = QLabel("Stain1 (For Live/Dead Cells):", self)
+        self.stain1_label = QLabel("Staining inactive cells (e.g. PI):", self)
         self.stain1_combo = QComboBox(self)
+        self.stain1_combo.setToolTip(
+            "Select the channel that will be used for gating live/dead cells. "
+            "All events where the threshold is met will be classified as dead."
+        )
         self.stain1_relation = QComboBox(self)
         self.stain1_relation.addItems(['>', '<'])
         self.stain1_threshold = QLineEdit(self)
@@ -99,8 +103,13 @@ class PredictionPanel(QWidget):
 
         # Stain 2 selection (for debris, optional)
         self.stain2_layout = QHBoxLayout()
-        self.stain2_label = QLabel("Stain2 (For Debris)(Optional):", self)
+        self.stain2_label = QLabel("Staining all cells (e.g. SYBR/DAPI):", self)
         self.stain2_combo = QComboBox(self)
+        self.stain2_combo.setToolTip(
+            "Select the channel that will be used for gating all cells. "
+            "All events where the threshold is met will be classified as cells. "
+            "The rest of the events will be classified as debris."
+        )
         self.stain2_relation = QComboBox(self)
         self.stain2_relation.addItems(['>', '<'])
         self.stain2_threshold = QLineEdit(self)
@@ -207,12 +216,13 @@ class PredictionPanel(QWidget):
                     self.on_error("\
                         Column names on your coculture files differ. Please make sure you only include files sharing the same column names."
                     )
+                numeric_colums_set = set(numeric_columns)
                 # Populate the combo boxes with the numeric column names
-                self.stain1_combo.addItems(numeric_columns)
-                self.stain2_combo.addItems(numeric_columns)
-                self.x_axis_combo.addItems(numeric_columns)
-                self.y_axis_combo.addItems(numeric_columns)
-                self.z_axis_combo.addItems(numeric_columns)
+                self.stain1_combo.addItems(numeric_colums_set)
+                self.stain2_combo.addItems(numeric_colums_set)
+                self.x_axis_combo.addItems(numeric_colums_set)
+                self.y_axis_combo.addItems(numeric_colums_set)
+                self.z_axis_combo.addItems(numeric_colums_set)
                 # Keep dictionary with sample names (key) and their corresponding data_df (value)
                 self.sample_to_df = sample_to_df
             except:
@@ -239,6 +249,7 @@ class PredictionPanel(QWidget):
         self.stop_loading_cursor()
         QMessageBox.information(self, "Prediction Complete", f"Predictions have been saved in {self.predict_dir}.")
         self.thread = None
+
 
     def toggle_gating_options(self):
         # Show or hide gating options based on checkbox state
