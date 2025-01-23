@@ -305,12 +305,16 @@ def save_gating_results(gated_data_df, output_dir, sample, x_axis, y_axis, z_axi
 
     gating_plot(gated_data_df, species_names, x_axis, y_axis, z_axis, gated_dir, sample)
 
-    print("3D scatter plot for gated data saved to:", plot_path)
+    print("3D scatter plot for gated data saved to:", gated_dir)
 
 
 def run_heterogeneity(data_df, species_list, output_dir, sample):
 
     hetero_df = data_df.copy()
+
+    # Create a directory for heterogeneity results
+    heterogeneity_dir = os.path.join(output_dir, 'heterogeneity_results')
+    os.makedirs(heterogeneity_dir, exist_ok=True)
 
     # Check and correct negative entries
     for col in hetero_df.columns[:-2]:
@@ -330,8 +334,9 @@ def run_heterogeneity(data_df, species_list, output_dir, sample):
         raise ValueError("Error calculating heterogeneity.") from e
 
     # Create and save heterogeneity plots
-    save_heterogeneity_plots(hetero1, hetero2, output_dir, sample)
-    hetero_res_file = os.path.join(output_dir, "heterogeneity_results.txt")
+    save_heterogeneity_plots(hetero1, hetero2, heterogeneity_dir, sample)
+    res_file = "_".join([sample, "heterogeneity_results.txt"])
+    hetero_res_file = os.path.join(heterogeneity_dir, res_file)
     with open(hetero_res_file, "w") as f:
         f.write("Species\tSimple Heterogeneity\tMedoid Heterogeneity\n")
         f.write(f"Coculture overall\t{hetero1}\t{hetero2}\n")
@@ -342,6 +347,7 @@ def run_heterogeneity(data_df, species_list, output_dir, sample):
         try:
             hetero1 = hetero_simple(df.iloc[:, :-2])
             hetero2 = hetero_mini_batch(df.iloc[:, :-2])
+            save_heterogeneity_plots(hetero1, hetero2, heterogeneity_dir, sample, species)
         except ValueError as e:
             raise ValueError("Error calculating heterogeneity.") from e
         with open(hetero_res_file, "a") as f:
@@ -375,10 +381,6 @@ def hetero_mini_batch(data, type='av_diss'):
 
 def save_heterogeneity_plots(hetero1, hetero2, output_dir, sample, species = None):
 
-    # Create a directory for heterogeneity results
-    heterogeneity_dir = os.path.join(output_dir, 'heterogeneity_results')
-    os.makedirs(heterogeneity_dir, exist_ok=True)
-
     # Values corresponding to each measure
     metrics_data = [hetero1, hetero2]
     labels = ['Simple Heterogeneity', 'Medoid Heterogeneity']
@@ -389,10 +391,10 @@ def save_heterogeneity_plots(hetero1, hetero2, output_dir, sample, species = Non
     plot_height = 600
 
     # Pie chart
-    heterogeneity_pie_chart(labels, metrics_data, colors, heterogeneity_dir, sample, plot_width, plot_height)
+    heterogeneity_pie_chart(labels, metrics_data, colors, output_dir, sample, species, plot_width, plot_height)
 
     # Bar chart
-    heterogeneity_bar_plot(labels, metrics_data, colors, heterogeneity_dir, sample, plot_width, plot_height)
+    heterogeneity_bar_plot(labels, metrics_data, colors, output_dir, sample, species, plot_width, plot_height)
 
     for metric in metrics_data:
         print(f"Heterogeneity {metric} is of type: {type(metric)}")

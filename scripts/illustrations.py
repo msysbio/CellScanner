@@ -72,19 +72,23 @@ def uncertainty_plot(coc_arcsin_df, x_axis, y_axis, z_axis, plot_path):
     print("3D scatter plot (Uncertainty) saved to:", plot_path)
 
 
-def heterogeneity_pie_chart(labels, metrics_data, colors, heterogeneity_dir, sample, plot_width=800, plot_height=600):
+def heterogeneity_pie_chart(labels, metrics_data, colors, heterogeneity_dir, sample, species=None, plot_width=800, plot_height=600):
 
     fig1 = go.Figure(data=[go.Pie(labels=labels, values=metrics_data, marker_colors=colors, hole=.3)])
-    fig1.update_layout(title_text='Heterogeneity of the Sample',width=plot_width,
-        height=plot_height)
+
+    fig1.update_layout(
+        title_text='Heterogeneity of the Sample',
+        width=plot_width,
+        height=plot_height
+    )
     pie_chart_path = os.path.join(
-        heterogeneity_dir, "_".join([sample, 'heterogeneity_pie_chart.html'])
+        heterogeneity_dir, f"{sample}_{species}_heterogeneity_pie_chart" if species else f"{sample}_heterogeneity_pie_chart"
     )
     fig1.write_html(pie_chart_path)
     print(f"Pie chart saved to: {pie_chart_path}")
 
 
-def heterogeneity_bar_plot(labels, metrics_data, colors, heterogeneity_dir, sample, plot_width=800, plot_height=600):
+def heterogeneity_bar_plot(labels, metrics_data, colors, heterogeneity_dir, sample, species=None, plot_width=800, plot_height=600):
 
     fig2 = go.Figure(data=[go.Bar(x=labels, y=metrics_data, marker_color=colors)])
     fig2.update_layout(
@@ -93,10 +97,10 @@ def heterogeneity_bar_plot(labels, metrics_data, colors, heterogeneity_dir, samp
         yaxis_title='Value',
         xaxis_tickangle=-45,
         width=plot_width,
-        height=plot_height)
-
+        height=plot_height
+    )
     bar_chart_path = os.path.join(
-        heterogeneity_dir, "_".join([sample,'heterogeneity_bar_chart.html'])
+        heterogeneity_dir, f"{sample}_{species}_heterogeneity_bar_chart.html" if species else f"{sample}_heterogeneity_bar_chart.html"
     )
     fig2.write_html(bar_chart_path)
     print(f"Bar chart saved to: {bar_chart_path}")
