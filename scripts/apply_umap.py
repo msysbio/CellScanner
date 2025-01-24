@@ -8,6 +8,7 @@ from sklearn.neighbors import NearestNeighbors
 import plotly.express as px
 from .nn import prepare_for_training
 from .helpers import get_abs_path
+from .illustrations import umap_plot
 
 
 def process_file(file, species_name, n_events):
@@ -96,42 +97,23 @@ def process_files(TrainPanel=None, **kwargs):
         min_dist=umap_min_dist
     )
 
+    # Fit and transform the data
     embedding = reducer.fit_transform(scaled_data_subset)
 
     label_map = {species_name: idx for idx, species_name in enumerate(species_files_names_dict.keys())}
     label_map['Blank'] = len(label_map)
     mapped_labels = combined_df['Species'].map(label_map).values
 
-    # Generate UMAP plot before filtering
-    fig_before = px.scatter_3d(
-        x=embedding[:, 0],
-        y=embedding[:, 1],
-        z=embedding[:, 2],
-        color=combined_df['Species'],
-        title='UMAP Projection Before Filtering',
-        opacity=0.7,
-        labels={
-            'x': 'UMAP1',
-            'y': 'UMAP2',
-            'z': 'UMAP3',
-            'color': 'Species'
-        },
-
-    )
-    fig_before.update_traces(marker=dict(size=5))
-
     # Define the path to save the plot
     model_dir = os.path.join(working_directory, "model")  # get_abs_path('model/statistics')
     os.makedirs(model_dir, exist_ok=True)
-    umap_before_path = os.path.join(model_dir, 'umap_before_filtering.html')
-
-    # Save the plot as an HTML file
-    fig_before.write_html(umap_before_path)
+    # Plot UMAP before filtering
+    umap_plot(combined_df, embedding, model_dir, "Before", None)
 
     # Nearest Neighbors filtering
     nn = NearestNeighbors(n_neighbors=50)
     nn.fit(embedding)
-    distances, indices = nn.kneighbors(embedding)
+    _, indices = nn.kneighbors(embedding)
     indices_to_keep = []
 
     for i in range(len(embedding)):
@@ -147,34 +129,11 @@ def process_files(TrainPanel=None, **kwargs):
 
     cleaned_data = combined_df.iloc[indices_to_keep]
 
-    # Generate UMAP plot after filtering
-    fig_after = px.scatter_3d(
-        x=embedding[indices_to_keep, 0],
-        y=embedding[indices_to_keep, 1],
-        z=embedding[indices_to_keep, 2],
-        color=cleaned_data['Species'],
-        title='UMAP Projection After Filtering',
-        opacity=0.7,
-        labels={
-            'x': 'UMAP1',
-            'y': 'UMAP2',
-            'z': 'UMAP3',
-            'color': 'Species'
-        },
-
-    )
-    fig_after.update_traces(marker=dict(size=5))
-
-    umap_after_path = os.path.join(model_dir, 'umap_after_filtering.html')
-    fig_after.write_html(umap_after_path)
-
+    # Plot UMAP after filtering
+    umap_plot(cleaned_data, embedding, model_dir, "After", indices_to_keep)
     print("Data processing and UMAP filtering successful.")
-
     if gui:
-        print("Run prepare for training function.")
         TrainPanel.cleaned_data = cleaned_data
-        # return prepare_for_training(TrainPanel)
         prepare_for_training(TrainPanel)
 
     return cleaned_data
-

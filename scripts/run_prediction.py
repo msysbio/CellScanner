@@ -79,7 +79,6 @@ def predict(PredictionPanel=None, **kwargs):
     )
     # Convert uncertainties to a Pandas Series
     data_df_pred = data_df.copy()
-    uncertainties = pd.Series(uncertainties, index=data_df_pred.index)
 
     # Drop the 'Time' column if it exists
     if 'Time' in data_df_pred.columns:
@@ -90,6 +89,7 @@ def predict(PredictionPanel=None, **kwargs):
 
     # Add predictions and uncertainties to the coculture data
     data_df_pred['predictions'] = mapped_predictions
+
     # Ensure uncertainties is a Series with the same index
     uncertainties = pd.Series(uncertainties, index=data_df_pred.index)
 
@@ -97,6 +97,7 @@ def predict(PredictionPanel=None, **kwargs):
     data_df_pred['uncertainties'] = uncertainties  # NOTE: This is the main df to work with
 
     # Filter out predictions of high entropy
+    # TODO - Add a threshold for entropy; use self.uncertainty_threshold
     if filter_out_uncertain:
         if uncertainty_threshold < 0 or uncertainty_threshold > 1:
             raise ValueError("Uncertainty threshold must be between 0 and 1.")
@@ -168,7 +169,7 @@ def predict_species(data_df, model, scaler, label_encoder, scaling_constant):
     predicted_classes = np.argmax(predictions, axis=1)
 
     # Calculate entropy for each prediction to represent uncertainty (using scipy.stats.entropy)
-    uncertainties = entropy(predictions, axis=1)
+    uncertainties = entropy(predictions, axis=1)  # uncertainties example shape (50000,)
 
     # Create the index-to-species mapping dictionary
     index_to_species = {index: label for index, label in enumerate(label_encoder.classes_)}
@@ -201,9 +202,9 @@ def apply_gating(data_df,
     gated_data_df['state'] = 'live'
 
     # Apply gating based on the first stain (live/dead)
-    if stain1_relation == '>':
+    if stain1_relation in ['>', 'greater_than']:
         gated_data_df.loc[gated_data_df[stain1] > stain1_threshold, 'state'] = 'inactive'
-    elif stain1_relation == '<':
+    elif stain1_relation in ['<', 'less_than']:
         gated_data_df.loc[gated_data_df[stain1] < stain1_threshold, 'state'] = 'inactive'
 
     state_counts = gated_data_df['state'].value_counts()
@@ -218,7 +219,8 @@ def apply_gating(data_df,
     if not valid_gating:
         stain_min, stain_max = np.min(gated_data_df[stain1]), np.max(gated_data_df[stain1])
         raise ValueError(
-            f"Invalid gating. Please check the gating thresholds. Stain ranges between {stain_min} and {stain_max}"
+            f"Invalid gating. Please check the gating thresholds."
+            f"Stain ranges between {stain_min} and {stain_max}, while current gating thresholds are {stain1_relation} {stain1_threshold}."
         )
 
     # Apply gating based on the second stain (debris)

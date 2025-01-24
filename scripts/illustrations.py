@@ -9,6 +9,28 @@ def create_color_map(species_list):
     return color_map
 
 
+def umap_plot(cleaned_data, embedding, model_dir, title, indices_to_keep=None):
+    # Generate UMAP plot after filtering
+    fig = px.scatter_3d(
+        x=embedding[:, 0] if indices_to_keep is None else embedding[indices_to_keep, 0],
+        y=embedding[:, 1] if indices_to_keep is None else embedding[indices_to_keep, 1],
+        z=embedding[:, 2] if indices_to_keep is None else embedding[indices_to_keep, 2],
+        color=cleaned_data['Species'],
+        title=f'UMAP Projection {title} Filtering',
+        opacity=0.7,
+        labels={
+            'x': 'UMAP1',
+            'y': 'UMAP2',
+            'z': 'UMAP3',
+            'color': 'Species'
+        },
+    )
+    fig.update_traces(marker=dict(size=5))
+    html_file = f'umap_{title}_filtering.html'
+    umap_after_path = os.path.join(model_dir, html_file)
+    fig.write_html(umap_after_path)
+
+
 def species_plot(coc_arsin_df, x_axis, y_axis, z_axis, color_map, plot_path):
 
     fig_species = px.scatter_3d(coc_arsin_df,

@@ -225,17 +225,17 @@ gating:
 
 stain1:
   channel:
-  sign: higher_than
+  sign: greater_than
   sign_values:
-    - higher_than
-    - lower_than
+    - greater_than
+    - less_than
   value: 45
   required: false
   description: >
     This parameter is required only when gating has been asked.
     In that case, you need to provide 3 parameters to describe your stain:
     The `channel`, that takes values the exact name of a column in the coculture file 
-    The `sign`, that can be either higher_than or lower_than, mentioning whether the channel 
+    The `sign`, that can be either greater_than or less_than, mentioning whether the channel 
     needs to have either a higher or a lower value from the one you are about to set. 
     And last, the actual `value`, with the threshold of the stain.
   type:
@@ -247,15 +247,15 @@ stain2:
   channel:
   sign:
   sign_values:
-    - higher_than
-    - lower_than
+    - greater_than
+    - less_than
   value:
   required: false
   description: >
     This parameter is optional even when gating has been asked, and it stands for debris.
     Like in the `stain1` case, you need to provide 3 parameters to describe your stain:
     The `channel`, that takes values the exact name of a column in the coculture file 
-    The `sign`, that can be either higher_than or lower_than, mentioning whether the channel 
+    The `sign`, that can be either greater_than or less_than, mentioning whether the channel 
     needs to have either a higher or a lower value from the one you are about to set. 
     And last, the actual `value`, with the threshold of the stain.
   type:
