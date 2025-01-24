@@ -1,7 +1,7 @@
 #Prediction.py
 import os
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox,\
-    QGroupBox, QLabel, QMessageBox, QLineEdit, QCheckBox, QFileDialog
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox,\
+    QGroupBox, QLabel, QMessageBox, QLineEdit, QCheckBox, QFileDialog, QDoubleSpinBox
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject
 import numpy as np
 import fcsparser
@@ -79,14 +79,18 @@ class PredictionPanel(QWidget):
         self.predict_panel_layout.addLayout(self.z_axis_layout)
 
         # Add a checkbox to apply gating
-        self.gating_checkbox = QCheckBox("Apply Gating for Live/Dead or Debris", self)
+        self.gating_checkbox = QCheckBox("Apply line gating", self)
         self.gating_checkbox.stateChanged.connect(self.toggle_gating_options)
         self.predict_panel_layout.addWidget(self.gating_checkbox)
 
         # Stain 1 selection (for live/dead)
         self.stain1_layout = QHBoxLayout()
-        self.stain1_label = QLabel("Stain1 (For Live/Dead Cells):", self)
+        self.stain1_label = QLabel("Staining inactive cells (e.g. PI):", self)
         self.stain1_combo = QComboBox(self)
+        self.stain1_combo.setToolTip(
+            "Select the channel that will be used for gating live/dead cells. "
+            "All events where the threshold is met will be classified as dead."
+        )
         self.stain1_relation = QComboBox(self)
         self.stain1_relation.addItems(['>', '<'])
         self.stain1_threshold = QLineEdit(self)
@@ -99,8 +103,13 @@ class PredictionPanel(QWidget):
 
         # Stain 2 selection (for debris, optional)
         self.stain2_layout = QHBoxLayout()
-        self.stain2_label = QLabel("Stain2 (For Debris)(Optional):", self)
+        self.stain2_label = QLabel("Staining all cells (e.g. SYBR/DAPI):", self)
         self.stain2_combo = QComboBox(self)
+        self.stain2_combo.setToolTip(
+            "Select the channel that will be used for gating all cells. "
+            "All events where the threshold is met will be classified as cells. "
+            "The rest of the events will be classified as debris."
+        )
         self.stain2_relation = QComboBox(self)
         self.stain2_relation.addItems(['>', '<'])
         self.stain2_threshold = QLineEdit(self)
@@ -111,89 +120,117 @@ class PredictionPanel(QWidget):
         self.stain2_layout.addWidget(self.stain2_threshold)
         self.predict_panel_layout.addLayout(self.stain2_layout)
 
-        # Hide gating options initially
+        # Add a checkbox to apply uncertainty filtering
+        self.uncertainty_filtering_checkbox = QCheckBox("Apply filtering on the predictions based on their uncertainty scores.", self)
+        self.uncertainty_filtering_checkbox.stateChanged.connect(self.toggle_uncertainty_filterint_options)
+        self.predict_panel_layout.addWidget(self.uncertainty_filtering_checkbox)
+
+        # Scaling constant for uncertainty filtering
+        self.uncertainty_threshold_layout = QHBoxLayout()
+        self.uncertainty_threshold_label = QLabel("Threshold for uncertainty filtering:", self)
+        self.uncertainty_threshold_layout.addWidget(self.uncertainty_threshold_label)
+
+        self.uncertainty_threshold = QDoubleSpinBox(self)
+        self.uncertainty_threshold.setToolTip(\
+            "Set percantile threshold for filtering out uncertain predictions [0,1]. "
+            "CellScanner will compute the number of classes and this percantile will be used "
+            "to filter out (set as `Unknonwn`) predictions with an entropy higher than the threshold*max_entropy "
+            "where max entropy equals to log(number_of_classes). Thus, the lower the threshold, "
+            "the stricter the filtering, the more uncertain predictions will be filtered out."
+            "By leaving this to its default value (1.0), CellScanner will automatically perform a threshold selection "
+            "for the one securing the highest accuracy on the training set."
+            "Note: The automated selection is only available when the training step is being performed; not when loading a model."
+        )
+        self.uncertainty_threshold.setRange(0.0, 1.0)  # Set minimum and maximum values
+        self.uncertainty_threshold.setSingleStep(0.01)  # Set step size
+        self.uncertainty_threshold.setValue(1.0)  # Set default value
+        self.uncertainty_threshold_layout.addWidget(self.uncertainty_threshold)
+
+        self.predict_panel_layout.addLayout(self.uncertainty_threshold_layout)
+
+        # Hide gating and uncertainty filtering options initially
         self.toggle_gating_options()
+        self.toggle_uncertainty_filterint_options()
 
         # Run Prediction Button
         self.run_prediction_button = QPushButton("Predict", self)
         self.run_prediction_button.setStyleSheet(button_style(font_size=12, padding=5))
         self.run_prediction_button.clicked.connect(self.fire_predict)
 
-
         self.predict_panel_layout.addWidget(self.run_prediction_button)
 
 
     def fire_predict(self):
-        self.samples_number = len(self.sample_to_df)
-        if self.samples_number == 0:
-            raise ValueError("Coculture data have not been provided.")
+        try:
+            self.start_loading_cursor()
+            self.samples_number = len(self.sample_to_df)
+            if self.samples_number == 0:
+                raise ValueError("Coculture data have not been provided.")
 
-        # Create a new thread for processing- without it the app froze while running Neural
-        self.thread = QThread()
-        self.worker = WorkerPredict(PredictPanel=self)
-        self.worker.moveToThread(self.thread)
-        self.thread.started.connect(self.worker.run_predict)
+            # Create a new thread for processing- without it the app froze while running Neural
+            self.thread = QThread()
+            self.worker = WorkerPredict(PredictPanel=self)
+            self.worker.moveToThread(self.thread)
+            self.worker.error_signal.connect(self.on_error)
 
-        # Apply UMAP & train neural network
-        self.worker.finished_signal.connect(self.prediction_completed)
-        self.worker.finished_signal.connect(self.thread.quit)
+            self.thread.started.connect(self.worker.run_predict)
 
-        # Ensure the thread finishes properly but does not exit the app
-        self.thread.finished.connect(self.thread.deleteLater)
+            # Apply UMAP & train neural network
+            self.worker.finished_signal.connect(self.prediction_completed)
+            self.worker.finished_signal.connect(self.thread.quit)
 
-        # Thread-related tasks to perform and check if fine
-        self.thread.start()
+            # Ensure the thread finishes properly but does not exit the app
+            self.thread.finished.connect(self.thread.deleteLater)
 
+            # Thread-related tasks to perform and check if fine
+            self.thread.start()
+        except Exception as e:
+            self.on_error(str(e))
 
-    def prediction_completed(self):
-        QMessageBox.information(self, "Prediction Complete", f"Predictions have been saved in {self.predict_dir}.")
 
     def choose_coculture_file(self):
         select_coculture_message = ["Select Coculture File", "", "Flow Cytometry Files (*.fcs);;All Files (*)"]
         coculture_filepath, _ = QFileDialog.getOpenFileNames(self, *select_coculture_message)
         if coculture_filepath:
-            # try:
-            print("\n\n COCULTURE FILES: ", coculture_filepath)
 
-            sample_to_df = {}
-            sample_numeric_columns = {}
+            try:
+                sample_to_df = {}
+                sample_numeric_columns = {}
 
-            for coc in coculture_filepath:
-                _, data_df = fcsparser.parse(coc, reformat_meta=True)
-                # Drop the 'Time' column if it exists
-                if 'Time' in data_df.columns:
-                    data_df = data_df.drop(columns=['Time'])
-                    sample_file_basename = os.path.basename(coc)  # coc.split('/')[-1]
-                    sample, _ = os.path.splitext(sample_file_basename)
+                for coc in coculture_filepath:
+                    _, data_df = fcsparser.parse(coc, reformat_meta=True)
 
-                    # Ensure only numeric columns are used in combo boxes
-                    numeric_columns = data_df.select_dtypes(include=[np.number]).columns
-                    sample_numeric_columns[sample_file_basename] = numeric_columns
-                    sample_to_df[sample] = data_df
+                    # Drop the 'Time' column if it exists
+                    if 'Time' in data_df.columns:
+                        data_df = data_df.drop(columns=['Time'])
+                        sample_file_basename = os.path.basename(coc)  # coc.split('/')[-1]
+                        sample, _ = os.path.splitext(sample_file_basename)
 
-            # Show files selected in the button
-            self.choose_coculture_file_button.setText(",".join(sample_to_df.keys()))  # Display only the filename, not the full path
+                        # Ensure only numeric columns are used in combo boxes
+                        numeric_columns = data_df.select_dtypes(include=[np.number]).columns
+                        sample_numeric_columns[sample_file_basename] = numeric_columns
+                        sample_to_df[sample] = data_df
 
-            # Check if all files share the same numeric column names
-            all_same = all(value.equals(list(sample_numeric_columns.values())[0]) for value in sample_numeric_columns.values())
-            if not all_same:
-                self.on_error("\
-                    Column names on your coculture files differ. Please make sure you only include files sharing the same column names."
-                )
+                # Show files selected in the button
+                self.choose_coculture_file_button.setText(",".join(sample_to_df.keys()))  # Display only the filename, not the full path
 
-            # Populate the combo boxes with the numeric column names
-            self.stain1_combo.addItems(numeric_columns)
-            self.stain2_combo.addItems(numeric_columns)
-            self.x_axis_combo.addItems(numeric_columns)
-            self.y_axis_combo.addItems(numeric_columns)
-            self.z_axis_combo.addItems(numeric_columns)
-
-            # Keep dictionary with sample names (key) and their corresponding data_df (value)
-            self.sample_to_df = sample_to_df
-
-            # except:
-            #     self.on_error("Something went off with your coculture files.")
-
+                # Check if all files share the same numeric column names
+                all_same = all(value.equals(list(sample_numeric_columns.values())[0]) for value in sample_numeric_columns.values())
+                if not all_same:
+                    self.on_error("\
+                        Column names on your coculture files differ. Please make sure you only include files sharing the same column names."
+                    )
+                numeric_colums_set = set(numeric_columns)
+                # Populate the combo boxes with the numeric column names
+                self.stain1_combo.addItems(numeric_colums_set)
+                self.stain2_combo.addItems(numeric_colums_set)
+                self.x_axis_combo.addItems(numeric_colums_set)
+                self.y_axis_combo.addItems(numeric_colums_set)
+                self.z_axis_combo.addItems(numeric_colums_set)
+                # Keep dictionary with sample names (key) and their corresponding data_df (value)
+                self.sample_to_df = sample_to_df
+            except:
+                self.on_error("Something went off with your coculture files.")
         else:
             print("No coculture file selected.")
             self.choose_coculture_file_button.setText(select_coculture_message[0])
@@ -202,6 +239,19 @@ class PredictionPanel(QWidget):
     def on_error(self, message):
         self.stop_loading_cursor()
         QMessageBox.critical(self, "Error", message)
+        self.thread = None
+
+    def start_loading_cursor(self):
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+
+
+    def stop_loading_cursor(self):
+        QApplication.restoreOverrideCursor()
+
+
+    def prediction_completed(self):
+        self.stop_loading_cursor()
+        QMessageBox.information(self, "Prediction Complete", f"Predictions have been saved in {self.predict_dir}.")
         self.thread = None
 
 
@@ -217,9 +267,17 @@ class PredictionPanel(QWidget):
         self.stain2_relation.setVisible(is_checked)
         self.stain2_threshold.setVisible(is_checked)
 
+
+    def toggle_uncertainty_filterint_options(self):
+        is_checked = self.uncertainty_filtering_checkbox.isChecked()
+        self.filter_out_uncertain = True
+        self.uncertainty_threshold_label.setVisible(is_checked)
+        self.uncertainty_threshold.setVisible(is_checked)
+
 class WorkerPredict(QObject):
 
     finished_signal = pyqtSignal()  # Define a signal for completion
+    error_signal = pyqtSignal(str)
 
     def __init__(self, PredictPanel=None):
         super().__init__()
@@ -231,9 +289,11 @@ class WorkerPredict(QObject):
         multiple_cocultures = True if self.PredictPanel.samples_number > 1 else False
 
         # Get output directory for the predictions
-        self.PredictPanel.predict_dir = time_based_dir(prefix="Prediction",
-                                          base_path=self.PredictPanel.file_panel.output_dir,
-                                          multiple_cocultures=multiple_cocultures)
+        self.PredictPanel.predict_dir = time_based_dir(
+            prefix="Prediction",
+            base_path=self.PredictPanel.file_panel.output_dir,
+            multiple_cocultures=multiple_cocultures
+        )
         os.makedirs(self.PredictPanel.predict_dir, exist_ok=True)
 
         # Loop over the coculture files and run predict()
@@ -244,7 +304,10 @@ class WorkerPredict(QObject):
             self.PredictPanel.sample = sample
 
             # Run predict() for a single sample
-            predict(self.PredictPanel)
+            try:
+                predict(self.PredictPanel)
+            except Exception as e:
+                self.error_signal.emit(f"Error during prediction: {str(e)}")
 
         # Merge predictions in case of multiple coculture files
         if multiple_cocultures:
@@ -256,4 +319,7 @@ class WorkerPredict(QObject):
             merge_prediction_results(self.PredictPanel.predict_dir, "uncertainty")
 
         self.finished_signal.emit()  # Emit the finished signal when done
+
+
+
 

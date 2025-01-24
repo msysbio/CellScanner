@@ -69,6 +69,11 @@ class CellScannerCLI():
         self.x_axis = get_param_value("x_axis", conf)
         self.y_axis = get_param_value("y_axis", conf)
         self.z_axis = get_param_value("z_axis", conf)
+        self.filter_out_uncertain = get_param_value("filter_out_uncertain", conf)
+        if self.filter_out_uncertain:
+            self.uncertainty_threshold = conf.get("filter_out_uncertain", {}).get("threshold")
+        else:
+            self.uncertainty_threshold = None
 
         # Gating parameters
         self.gating = get_param_value("gating", conf)
@@ -94,7 +99,7 @@ class CellScannerCLI():
             working_directory=self.output_dir
         )
 
-        self.model = train_neural_network(
+        self.model, self.cs_uncertainty_threshold = train_neural_network(
             fold_count=self.folds,
             epochs=self.epochs,
             batch_size=self.batch_size,
@@ -108,11 +113,15 @@ class CellScannerCLI():
 
     def predict_coculture(self):
 
-        if self.model is None:
-            print("hello friend")
+        if not all([self.model, self.scaler, self.le]):
+            raise ValueError("Please ensure a trained model, scaler, and label encoder are provided before predicting cocultures.")
 
         multiple_cocultures = True if len(self.coculture_files) > 1 else False
-        self.predict_dir = time_based_dir(prefix="Prediction", base_path=self.output_dir, multiple_cocultures=multiple_cocultures)
+        self.predict_dir = time_based_dir(
+            prefix="Prediction",
+            base_path=self.output_dir,
+            multiple_cocultures=multiple_cocultures
+        )
         os.makedirs(self.predict_dir, exist_ok=True)
 
         for sample_file in self.coculture_files:
@@ -129,6 +138,11 @@ class CellScannerCLI():
             if self.x_axis or self.y_axis or self.z_aixs not in data_df.columns:
                 self.x_axis, self.y_axis, self.z_axis = data_df.columns[:3]
 
+            self.cs_threshold = False
+            if self.filter_out_uncertain and self.uncertainty_threshold is None:
+                self.uncertainty_threshold = self.cs_uncertainty_threshold
+                self.cs_threshold = True
+
             # Define common parameters
             predict_params = {
                 "sample": sample,
@@ -141,7 +155,10 @@ class CellScannerCLI():
                 "y_axis_combo": self.y_axis,
                 "z_axis_combo": self.z_axis,
                 "gating": self.gating,
-                "scaling_constant": self.scaling_constant
+                "scaling_constant": self.scaling_constant,
+                "filter_out_uncertain": self.filter_out_uncertain,
+                "uncertainty_threshold": self.uncertainty_threshold,
+                "cs_threshold": self.cs_threshold
             }
 
             # Add specific parameters based on gating
@@ -151,7 +168,7 @@ class CellScannerCLI():
                     "stain2": self.stain_2
                 })
 
-            # Call predict function
+            # Call predict function; df is the prediction dataframe after entropy filtering if step is applied
             predict(**predict_params)
 
         if multiple_cocultures:
@@ -269,8 +286,8 @@ def get_stain_params(stain, conf):
     if not all([channel, sign, value]) and stain=="stain1":
         missing = [k for k, v in {"channel": channel, "sign": sign, "value": value}.items() if v is None]
         raise ValueError(f"Please provide {' and '.join(missing)} for {stain}.")
-    elif not all([channel]):
-        missing = [k for k, v in {"channel": channel, "sign": sign, "value": value}.items() if v is None]
+    if stain=="stain2" and channel is not None:
+        missing = [k for k, v in {"sign": sign, "value": value}.items() if v is None]
         raise ValueError(f"Please provide {' and '.join(missing)} for {stain}.")
 
     return Stain(channel, sign, value)

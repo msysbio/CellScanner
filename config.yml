@@ -197,6 +197,22 @@ z_axis:
     The third channel of the coculture data to be used in the 3D plot.
   type: str
 
+filter_out_uncertain:
+  value: false
+  threshold: 0.5
+  required: false
+  default: false
+  description: >
+    Set true in case you wish to filter out uncertain predictions. 
+    In case you wish to filter out uncertain predictions, an uncertainty threshold is required.
+    To this end, you can:
+    - set a threshold of your choice in the `threshold` parameter above
+    - leave the `threshold` parameter empty and CellScanner will compute the number of classes and set the threshold 
+    based on the threshold*max_entropy, where max entropy equals to log(number_of_classes), that returns the maximum accuracy.
+    please provide also a threshold of your choice. 
+    Thus, the lower the threshold, the stricter the filtering, the more uncertain predictions will be filtered out (assigned as Unknown).
+  type: bool
+
 # ---------------------
 # Gating parameters
 # ---------------------
@@ -210,17 +226,17 @@ gating:
 
 stain1:
   channel:
-  sign: higher_than
+  sign: greater_than
   sign_values:
-    - higher_than
-    - lower_than
+    - greater_than
+    - less_than
   value: 45
   required: false
   description: >
     This parameter is required only when gating has been asked.
     In that case, you need to provide 3 parameters to describe your stain:
     The `channel`, that takes values the exact name of a column in the coculture file 
-    The `sign`, that can be either higher_than or lower_than, mentioning whether the channel 
+    The `sign`, that can be either greater_than or less_than, mentioning whether the channel 
     needs to have either a higher or a lower value from the one you are about to set. 
     And last, the actual `value`, with the threshold of the stain.
   type:
@@ -229,18 +245,18 @@ stain1:
     - value: int
 
 stain2:
-  channel: cherry
+  channel:
   sign:
-    values_from:
-      - higher_than
-      - lower_than
+  sign_values:
+    - greater_than
+    - less_than
   value:
   required: false
   description: >
-    This parameter is required only when gating has been asked.
-    In that case, you need to provide 3 parameters to describe your stain:
+    This parameter is optional even when gating has been asked, and it stands for debris.
+    Like in the `stain1` case, you need to provide 3 parameters to describe your stain:
     The `channel`, that takes values the exact name of a column in the coculture file 
-    The `sign`, that can be either higher_than or lower_than, mentioning whether the channel 
+    The `sign`, that can be either greater_than or less_than, mentioning whether the channel 
     needs to have either a higher or a lower value from the one you are about to set. 
     And last, the actual `value`, with the threshold of the stain.
   type:
