@@ -136,7 +136,7 @@ def train_neural_network(TrainPanel=None, **kwargs):
     # Return the best model
     if gui:
         TrainPanel.model = trained_model
-        TrainPanel.threshold = threshold
+        TrainPanel.cs_uncertainty_threshold = threshold
     else:
         return trained_model, threshold
 
@@ -269,14 +269,19 @@ def save_train_stats(model, X_val_bf, y_val_bf, species_names, model_dir, best_a
                   else os.path.join(model_dir, 'model_statistics.csv')
     )
     with open(stats_path, 'w') as f:
+
         if best_fold is not None:
             f.write(f"Folds: {fold_count}\n")
             f.write(f"Best Fold: {best_fold}\n")
-        f.write(f"Best Fold Accuracy: {best_accuracy:.4f}\n\n")
+
+        f.write(f"Best Accuracy: {best_accuracy:.4f}")
+        f.write("Threshold for Uncertainty: {:.4f}\n\n".format(threshold))
+
         f.write("Confusion Matrix:\n")
         conf_matrix_df.to_csv(f, header=True, index=True)
         f.write("\nClassification Report:\n")
         class_report_df.to_csv(f, header=True, index=True)
+
     if best_fold is not None:
         print(f"K-Fold training done. Best fold = {best_fold} with accuracy = {best_accuracy:.4f}. Stats saved.")
     else:
@@ -321,8 +326,8 @@ def calculate_threshold(uncertainties, y_pred_classes, y_true_classes, species_n
     threshold_report = {}
     max_threshold = np.max(uncertainties)
 
-    for dozen in range(0, 100, 10):
-        threshold = dozen / 100 * max_threshold
+    for quantile in range(0, 100, 10):
+        threshold = quantile / 100 * max_threshold
         try:
             # Filter out predictions with uncertainty below threshold
             valid_indices = np.where(uncertainties < threshold)[0]

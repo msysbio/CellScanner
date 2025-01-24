@@ -203,13 +203,14 @@ filter_out_uncertain:
   required: false
   default: false
   description: >
-    Set whether you wish to filter out uncertain predictions. 
-    If you wish so, then please provide also a threshold of your choice. 
-    CellScanner will compute the number of classes and this threshold will be used 
-    to filter out predictions with an entropy higher than the threshold*max_entropy
-    where max entropy equals to log(number_of_classes).
-    By default, the threshold is set to 0.5.
-    Thus, the lower the threshold, the stricter the filtering, the more uncertain predictions will be filtered out.
+    Set true in case you wish to filter out uncertain predictions. 
+    In case you wish to filter out uncertain predictions, an uncertainty threshold is required.
+    To this end, you can:
+    - set a threshold of your choice in the `threshold` parameter above
+    - leave the `threshold` parameter empty and CellScanner will compute the number of classes and set the threshold 
+    based on the threshold*max_entropy, where max entropy equals to log(number_of_classes), that returns the maximum accuracy.
+    please provide also a threshold of your choice. 
+    Thus, the lower the threshold, the stricter the filtering, the more uncertain predictions will be filtered out (assigned as Unknown).
   type: bool
 
 # ---------------------

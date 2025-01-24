@@ -2,13 +2,11 @@ import os
 import math
 import numpy as np
 import pandas as pd
-from typing import Dict, List
+from typing import List
 
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics import pairwise_distances
 from scipy.stats import entropy
-
-import plotly.express as px
 
 from .helpers import create_file_path
 from .illustrations import species_plot, uncertainty_plot, heterogeneity_pie_chart, heterogeneity_bar_plot, gating_plot, create_color_map
@@ -36,7 +34,14 @@ def predict(PredictionPanel=None, **kwargs):
         sample = PredictionPanel.sample
 
         filter_out_uncertain = PredictionPanel.uncertainty_filtering_checkbox.isChecked()
-        uncertainty_threshold = float(PredictionPanel.uncertainty_threshold.value()) if filter_out_uncertain else None
+        if filter_out_uncertain:
+            cs_threshold = False
+            uncertainty_threshold = float(PredictionPanel.uncertainty_threshold.value())
+            if uncertainty_threshold == 1.0:
+                print("cs threshold to be used")
+                uncertainty_threshold = PredictionPanel.train_panel.cs_uncertainty_threshold
+                cs_threshold = True
+                print(uncertainty_threshold)
 
         if gating:
             # Stain 1
@@ -63,6 +68,7 @@ def predict(PredictionPanel=None, **kwargs):
         scaling_constant = kwargs["scaling_constant"]
         filter_out_uncertain = kwargs["filter_out_uncertain"]
         uncertainty_threshold = kwargs["uncertainty_threshold"]
+        cs_threshold = kwargs["cs_threshold"]
         if gating:
             Stain1 = kwargs["stain1"]
             stain1, stain1_relation, stain1_threshold = Stain1.channel, Stain1.sign, Stain1.value
@@ -97,15 +103,15 @@ def predict(PredictionPanel=None, **kwargs):
     data_df_pred['uncertainties'] = uncertainties  # NOTE: This is the main df to work with
 
     # Filter out predictions of high entropy
-    # TODO - Add a threshold for entropy; use self.uncertainty_threshold
     if filter_out_uncertain:
-        if uncertainty_threshold < 0 or uncertainty_threshold > 1:
-            raise ValueError("Uncertainty threshold must be between 0 and 1.")
         number_of_classes = len(set(index_to_species.values()))
         max_entropy = math.log(number_of_classes)
-        print("Data shape before filtering", data_df_pred.shape)
-        data_df_pred = data_df_pred[data_df_pred['uncertainties'] / math.log(number_of_classes) <= uncertainty_threshold * max_entropy]
-        print("Data shape after filtering for entropy", data_df_pred.shape)
+        if cs_threshold is False:
+            if uncertainty_threshold < 0 or uncertainty_threshold > max_entropy:
+                raise ValueError("Uncertainty threshold must be between 0 and 1.")
+            uncertainty_threshold = uncertainty_threshold * max_entropy
+
+        data_df_pred.loc[data_df_pred["uncertainties"] > uncertainty_threshold, "predictions"] = "Unknown"
 
     # Save prediction results and plot the 3D scatter plot
     species_list = list(index_to_species.values())
@@ -397,9 +403,6 @@ def save_heterogeneity_plots(hetero1, hetero2, output_dir, sample, species = Non
 
     # Bar chart
     heterogeneity_bar_plot(labels, metrics_data, colors, output_dir, sample, species, plot_width, plot_height)
-
-    for metric in metrics_data:
-        print(f"Heterogeneity {metric} is of type: {type(metric)}")
 
 
 def merge_prediction_results(output_dir, prediction_type):

@@ -132,14 +132,18 @@ class PredictionPanel(QWidget):
 
         self.uncertainty_threshold = QDoubleSpinBox(self)
         self.uncertainty_threshold.setToolTip(\
-            "CellScanner will compute the number of classes and this threshold will be used "
-            "to filter out predictions with an entropy higher than the threshold*max_entropy "
+            "Set percantile threshold for filtering out uncertain predictions [0,1]. "
+            "CellScanner will compute the number of classes and this percantile will be used "
+            "to filter out (set as `Unknonwn`) predictions with an entropy higher than the threshold*max_entropy "
             "where max entropy equals to log(number_of_classes). Thus, the lower the threshold, "
             "the stricter the filtering, the more uncertain predictions will be filtered out."
+            "By leaving this to its default value (1.0), CellScanner will automatically perform a threshold selection "
+            "for the one securing the highest accuracy on the training set."
+            "Note: The automated selection is only available when the training step is being performed; not when loading a model."
         )
         self.uncertainty_threshold.setRange(0.0, 1.0)  # Set minimum and maximum values
         self.uncertainty_threshold.setSingleStep(0.01)  # Set step size
-        self.uncertainty_threshold.setValue(0.5)  # Set default value
+        self.uncertainty_threshold.setValue(1.0)  # Set default value
         self.uncertainty_threshold_layout.addWidget(self.uncertainty_threshold)
 
         self.predict_panel_layout.addLayout(self.uncertainty_threshold_layout)

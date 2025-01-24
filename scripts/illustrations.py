@@ -107,7 +107,6 @@ def heterogeneity_pie_chart(labels, metrics_data, colors, heterogeneity_dir, sam
         heterogeneity_dir, f"{sample}_{species}_heterogeneity_pie_chart" if species else f"{sample}_heterogeneity_pie_chart"
     )
     fig1.write_html(pie_chart_path)
-    print(f"Pie chart saved to: {pie_chart_path}")
 
 
 def heterogeneity_bar_plot(labels, metrics_data, colors, heterogeneity_dir, sample, species=None, plot_width=800, plot_height=600):
@@ -125,7 +124,6 @@ def heterogeneity_bar_plot(labels, metrics_data, colors, heterogeneity_dir, samp
         heterogeneity_dir, f"{sample}_{species}_heterogeneity_bar_chart.html" if species else f"{sample}_heterogeneity_bar_chart.html"
     )
     fig2.write_html(bar_chart_path)
-    print(f"Bar chart saved to: {bar_chart_path}")
 
 
 def gating_plot(gated_data_df, species_names, x_axis, y_axis, z_axis, gated_dir, sample):

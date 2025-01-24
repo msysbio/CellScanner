@@ -99,7 +99,7 @@ class CellScannerCLI():
             working_directory=self.output_dir
         )
 
-        self.model, self.threshold = train_neural_network(
+        self.model, self.cs_uncertainty_threshold = train_neural_network(
             fold_count=self.folds,
             epochs=self.epochs,
             batch_size=self.batch_size,
@@ -138,6 +138,11 @@ class CellScannerCLI():
             if self.x_axis or self.y_axis or self.z_aixs not in data_df.columns:
                 self.x_axis, self.y_axis, self.z_axis = data_df.columns[:3]
 
+            self.cs_threshold = False
+            if self.filter_out_uncertain and self.uncertainty_threshold is None:
+                self.uncertainty_threshold = self.cs_uncertainty_threshold
+                self.cs_threshold = True
+
             # Define common parameters
             predict_params = {
                 "sample": sample,
@@ -152,7 +157,8 @@ class CellScannerCLI():
                 "gating": self.gating,
                 "scaling_constant": self.scaling_constant,
                 "filter_out_uncertain": self.filter_out_uncertain,
-                "uncertainty_threshold": self.uncertainty_threshold
+                "uncertainty_threshold": self.uncertainty_threshold,
+                "cs_threshold": self.cs_threshold
             }
 
             # Add specific parameters based on gating
