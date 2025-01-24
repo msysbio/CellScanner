@@ -99,7 +99,7 @@ class CellScannerCLI():
             working_directory=self.output_dir
         )
 
-        self.model = train_neural_network(
+        self.model, self.threshold = train_neural_network(
             fold_count=self.folds,
             epochs=self.epochs,
             batch_size=self.batch_size,
