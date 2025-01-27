@@ -1,6 +1,7 @@
 import os
 import joblib
 
+import math
 import numpy as np
 import pandas as pd
 
@@ -274,7 +275,7 @@ def save_train_stats(model, X_val_bf, y_val_bf, species_names, model_dir, best_a
             f.write(f"Folds: {fold_count}\n")
             f.write(f"Best Fold: {best_fold}\n")
 
-        f.write(f"Best Accuracy: {best_accuracy:.4f}")
+        f.write(f"Best Accuracy: {best_accuracy:.4f}\n")
         f.write("Threshold for Uncertainty: {:.4f}\n\n".format(threshold))
 
         f.write("Confusion Matrix:\n")
@@ -288,6 +289,7 @@ def save_train_stats(model, X_val_bf, y_val_bf, species_names, model_dir, best_a
         print("Done training with single split (no cross-validation).")
 
     return threshold
+
 
 def predict_validation(model, X_val_bf, y_val_bf, species_names):
     """
@@ -320,11 +322,13 @@ def predict_validation(model, X_val_bf, y_val_bf, species_names):
     return conf_matrix_df, class_report_df, threshold
 
 
-
 def calculate_threshold(uncertainties, y_pred_classes, y_true_classes, species_names):
-
+    """
+    Returns the threshold that gives the best accuracy, not a quantile but the actual threshold.
+    Thus, its value can be higher than 1.0.
+    """
     threshold_report = {}
-    max_threshold = np.max(uncertainties)
+    max_threshold = math.log2(len(species_names))
 
     for quantile in range(0, 100, 10):
         threshold = quantile / 100 * max_threshold
@@ -360,4 +364,3 @@ def calculate_threshold(uncertainties, y_pred_classes, y_true_classes, species_n
         json.dump(threshold_report, f)
 
     return best_threshold
-

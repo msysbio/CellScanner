@@ -37,6 +37,7 @@ class PredictionPanel(QWidget):
         super().__init__(parent)
         self.file_panel = file_panel
         self.train_panel = train_panel
+
         self.layout = QVBoxLayout(self)
 
         # Create a group box for the prediction panel
@@ -132,18 +133,15 @@ class PredictionPanel(QWidget):
 
         self.uncertainty_threshold = QDoubleSpinBox(self)
         self.uncertainty_threshold.setToolTip(\
-            "Set percantile threshold for filtering out uncertain predictions [0,1]. "
-            "CellScanner will compute the number of classes and this percantile will be used "
-            "to filter out (set as `Unknonwn`) predictions with an entropy higher than the threshold*max_entropy "
-            "where max entropy equals to log(number_of_classes). Thus, the lower the threshold, "
-            "the stricter the filtering, the more uncertain predictions will be filtered out."
-            "By leaving this to its default value (1.0), CellScanner will automatically perform a threshold selection "
-            "for the one securing the highest accuracy on the training set."
-            "Note: The automated selection is only available when the training step is being performed; not when loading a model."
+            "Set threshold for filtering out uncertain predictions. "
+            "If you just trained a model, CellScanner computed already the threshold allowing the highest accuracy and set it as default. "
+            "If you are loading a model, you can set the threshold manually, and if you are using a previously trained model, "
+            "you can use its corresponding model_statistics file to remember the threshold suggested. "
+            "To use the widely used threshold of 0.5 of the maximum entropy, set this value to -1.0 and CellScanner will apply this."
         )
-        self.uncertainty_threshold.setRange(0.0, 1.0)  # Set minimum and maximum values
+        self.uncertainty_threshold.setRange(-1.0, 10.0)  # Set minimum and maximum values
         self.uncertainty_threshold.setSingleStep(0.01)  # Set step size
-        self.uncertainty_threshold.setValue(1.0)  # Set default value
+        self.update_uncertainty_threshold()
         self.uncertainty_threshold_layout.addWidget(self.uncertainty_threshold)
 
         self.predict_panel_layout.addLayout(self.uncertainty_threshold_layout)
@@ -273,6 +271,15 @@ class PredictionPanel(QWidget):
         self.filter_out_uncertain = True
         self.uncertainty_threshold_label.setVisible(is_checked)
         self.uncertainty_threshold.setVisible(is_checked)
+        self.update_uncertainty_threshold()
+
+
+    def update_uncertainty_threshold(self):
+        if self.train_panel.cs_uncertainty_threshold is not None:
+            self.uncertainty_threshold.setValue(self.train_panel.cs_uncertainty_threshold)
+        else:
+            self.uncertainty_threshold.setValue(-1.0)  # Set default value
+
 
 class WorkerPredict(QObject):
 
@@ -319,7 +326,3 @@ class WorkerPredict(QObject):
             merge_prediction_results(self.PredictPanel.predict_dir, "uncertainty")
 
         self.finished_signal.emit()  # Emit the finished signal when done
-
-
-
-
