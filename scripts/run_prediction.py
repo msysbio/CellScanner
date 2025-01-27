@@ -33,15 +33,14 @@ def predict(PredictionPanel=None, **kwargs):
         gating = PredictionPanel.gating_checkbox.isChecked()
         sample = PredictionPanel.sample
 
+        # NOTE: In case a model has just been trained, then the GUI will update the uncertainty threshold
+        # (PredictionPanel.uncertainty_threshold) accrordingly
+        # Otherwise, a -1 value will be the default value for the uncertainty threshold, in which case,
+        # the 0.5*max_entropy will be used as the threshold
+        # If the user gives an uncertainty threshold, then it will be used as the threshold -- not as a quantile.
         filter_out_uncertain = PredictionPanel.uncertainty_filtering_checkbox.isChecked()
         if filter_out_uncertain:
-            cs_threshold = False
             uncertainty_threshold = float(PredictionPanel.uncertainty_threshold.value())
-            if uncertainty_threshold == 1.0:
-                print("cs threshold to be used")
-                uncertainty_threshold = PredictionPanel.train_panel.cs_uncertainty_threshold
-                cs_threshold = True
-                print(uncertainty_threshold)
 
         if gating:
             # Stain 1
@@ -68,12 +67,21 @@ def predict(PredictionPanel=None, **kwargs):
         scaling_constant = kwargs["scaling_constant"]
         filter_out_uncertain = kwargs["filter_out_uncertain"]
         uncertainty_threshold = kwargs["uncertainty_threshold"]
-        cs_threshold = kwargs["cs_threshold"]
         if gating:
             Stain1 = kwargs["stain1"]
             stain1, stain1_relation, stain1_threshold = Stain1.channel, Stain1.sign, Stain1.value
             Stain2 = kwargs["stain2"]
             stain2, stain2_relation, stain2_threshold = Stain2.channel, Stain2.sign, Stain2.value
+
+    # Get uncertainty threshold
+    number_of_classes = len(label_encoder.classes_)
+    max_entropy = math.log(number_of_classes)
+    if (uncertainty_threshold < 0 and uncertainty_threshold != -1.0) or uncertainty_threshold > max_entropy:
+        raise ValueError("Uncertainty threshold must be between 0 and 1.")
+
+    elif uncertainty_threshold == -1.0:
+        uncertainty_threshold = 0.5 * max_entropy
+        print(f"Threshold as 0.5 of max entropy: {uncertainty_threshold}, max entropy: {max_entropy}")
 
     # Predict the species in the coculture file
     predicted_classes, uncertainties, index_to_species = predict_species(
@@ -83,6 +91,7 @@ def predict(PredictionPanel=None, **kwargs):
         label_encoder,
         scaling_constant
     )
+
     # Convert uncertainties to a Pandas Series
     data_df_pred = data_df.copy()
 
@@ -104,13 +113,6 @@ def predict(PredictionPanel=None, **kwargs):
 
     # Filter out predictions of high entropy
     if filter_out_uncertain:
-        number_of_classes = len(set(index_to_species.values()))
-        max_entropy = math.log(number_of_classes)
-        if cs_threshold is False:
-            if uncertainty_threshold < 0 or uncertainty_threshold > max_entropy:
-                raise ValueError("Uncertainty threshold must be between 0 and 1.")
-            uncertainty_threshold = uncertainty_threshold * max_entropy
-
         data_df_pred.loc[data_df_pred["uncertainties"] > uncertainty_threshold, "predictions"] = "Unknown"
 
     # Save prediction results and plot the 3D scatter plot
@@ -122,6 +124,7 @@ def predict(PredictionPanel=None, **kwargs):
         x_axis_combo, y_axis_combo, z_axis_combo,
         sample=sample,
         scaling_constant=scaling_constant,
+        uncertainty_threshold=uncertainty_threshold
     )
 
     # Gating
@@ -244,7 +247,8 @@ def save_prediction_results(data_df: pd.DataFrame,
                             output_dir: str,
                             x_axis, y_axis, z_axis,
                             sample: str = None,
-                            scaling_constant: int = 150
+                            scaling_constant: int = 150,
+                            uncertainty_threshold: float = 0.5
     ):
     # Ensure `data_df` is still a DataFrame and not an ndarray
     if not isinstance(data_df, pd.DataFrame):
@@ -265,8 +269,8 @@ def save_prediction_results(data_df: pd.DataFrame,
 
     # Calculate and save uncertainty counts by species
     uncertainty_counts = data_df.groupby('predictions')['uncertainties'].agg(
-        greater_than_0_5=lambda x: (x > 0.5).sum(),
-        less_than_equal_0_5=lambda x: (x <= 0.5).sum()
+        greater_than=lambda x: (x > uncertainty_threshold).sum(),
+        less_than=lambda x: (x <= uncertainty_threshold).sum()
     )
     uncertainty_counts.to_csv(outfile_uncertainties)
     print("Uncertainty counts by species saved to:", outfile_uncertainties)
@@ -283,11 +287,15 @@ def save_prediction_results(data_df: pd.DataFrame,
     color_map = create_color_map(species_list)
 
     # Plot 1: Species Plot
-    species_plot(coc_arsin_df=coculture_data_arcsin, plot_path=plot_path_species, x_axis=x_axis, y_axis=y_axis, z_axis=z_axis, color_map=color_map)
+    species_plot(coc_arsin_df=coculture_data_arcsin, plot_path=plot_path_species,
+                 x_axis=x_axis, y_axis=y_axis, z_axis=z_axis, color_map=color_map
+    )
     print("3D scatter plot (Species) saved to:", plot_path_species)
 
     # Plot 2: Uncertainty Plot
-    uncertainty_plot(coc_arcsin_df=coculture_data_arcsin, plot_path=plot_path_uncertainty, x_axis=x_axis, y_axis=y_axis, z_axis=z_axis)
+    uncertainty_plot(coc_arcsin_df=coculture_data_arcsin, plot_path=plot_path_uncertainty,
+                     x_axis=x_axis, y_axis=y_axis, z_axis=z_axis
+    )
     print("3D scatter plot (Uncertainty) saved to:", plot_path_uncertainty)
 
 
@@ -332,7 +340,7 @@ def run_heterogeneity(data_df, species_list, output_dir, sample):
 
     # Log transformation, handle zero values
     hetero_df.iloc[:, :-2] = hetero_df.iloc[:, :-2].replace(0, 1)
-    hetero_df.iloc[:, :-2] = np.log(hetero_df.iloc[:, :-2])
+    # hetero_df.iloc[:, :-2] = np.log(hetero_df.iloc[:, :-2])
 
     # Compute heterogeneity measures for the sample
     try:
@@ -365,8 +373,7 @@ def run_heterogeneity(data_df, species_list, output_dir, sample):
 def hetero_simple(data):
     # Calculate simple heterogeneity as the sum of mean ranges across all channels.
     ranges = data.apply(np.ptp, axis=0)
-    # return np.sum(ranges.mean())
-    return ranges.mean()
+    return np.sum(ranges.mean())
 
 
 def hetero_mini_batch(data, type='av_diss'):
