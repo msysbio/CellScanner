@@ -78,6 +78,7 @@ def predict(PredictionPanel=None, **kwargs):
             stain1, stain1_relation, stain1_threshold = Stain1.channel, Stain1.sign, Stain1.value
             Stain2 = kwargs["stain2"]
             stain2, stain2_relation, stain2_threshold = Stain2.channel, Stain2.sign, Stain2.value
+            extra_stains = kwargs["extra_stains"]
 
     # Get uncertainty threshold
     if filter_out_uncertain:
@@ -135,7 +136,7 @@ def predict(PredictionPanel=None, **kwargs):
         filter_out_uncertain=filter_out_uncertain
     )
 
-    # Gating
+    # Gating -- may return a "state" column mentioning live - dead cells, it may not
     if gating:
         # Apply gating
         gating_df, all_labels = apply_gating(data_df_pred,
@@ -150,7 +151,7 @@ def predict(PredictionPanel=None, **kwargs):
             all_labels
         )
         # Perform heterogeneity analysis
-        hetero_df = gating_df[(gating_df['state'] == 'live') & (gating_df['predictions'] != 'background')]
+        hetero_df = gating_df[gating_df['state'] == 'live'] if "state" in all_labels else gating_df
 
     else:
         hetero_df = data_df_pred.copy()

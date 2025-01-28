@@ -363,13 +363,66 @@ class PredictionPanel(QWidget):
                                 component.addItems(self.numeric_colums_set)
 
 
+class WorkerPredict(QObject):
+    """
+    Worker class for running predict() for each co-culture file loaded, and if more than one, merge the findings
+    """
+    finished_signal = pyqtSignal()  # Define a signal for completion
+    error_signal = pyqtSignal(str)
+
+    def __init__(self, PredictPanel=None):
+        super().__init__()
+        self.PredictPanel = PredictPanel  # Store the QWidget instance
+
+
+    def run_predict(self):
+        try:
+            extra_stains = iterate_stains(self.PredictPanel)
+            self.PredictPanel.extra_stains = extra_stains if len(extra_stains) > 0 else None
+            multiple_cocultures = True if self.PredictPanel.samples_number > 1 else False
+
+            # Get output directory for the predictions
+            self.PredictPanel.predict_dir = time_based_dir(
+                prefix="Prediction",
+                base_path=self.PredictPanel.file_panel.output_dir,
+                multiple_cocultures=multiple_cocultures
+            )
+            os.makedirs(self.PredictPanel.predict_dir, exist_ok=True)
+
+            # Loop over the coculture files and run predict()
+            for sample, data_df in self.PredictPanel.sample_to_df.items():
+
+                # Set data_df for the sample in process
+                self.PredictPanel.data_df = data_df
+                self.PredictPanel.sample = sample
+
+                # Run predict() for a single sample
+                predict(self.PredictPanel)
+
+            # Merge predictions in case of multiple coculture files
+            if multiple_cocultures:
+
+                print("Merge prediction of all samples into a single file.")
+                merge_prediction_results(self.PredictPanel.predict_dir, "prediction")
+
+                print("Merge prediction and uncertainties single file.")
+                merge_prediction_results(self.PredictPanel.predict_dir, "uncertainty")
+
+            self.finished_signal.emit()  # Emit the finished signal when done
+
+        except Exception as e:
+            self.error_signal.emit(f"Error during prediction: {str(e)}")
+
 
 def iterate_stains(self):
+    """
+    Return a dictionary with the extra stains settings as provided by the user in CS GUI
+    """
     extra_stains = {}
     for i in range(self.gating_layout.count()):
-        item = self.gating_layout.itemAt(i)  # Get the layout item
-        widget = item.widget()  # Get the associated widget
-        if widget:  # Ensure it's a QWidget
+        item = self.gating_layout.itemAt(i)
+        widget = item.widget()
+        if widget:
             # Access individual components within the stain container
             stain_layout = widget.layout()
             if stain_layout:
@@ -390,55 +443,3 @@ def iterate_stains(self):
                 extra_stains[channel] = (sign, threshold, label)
     return extra_stains
 
-
-class WorkerPredict(QObject):
-    """
-    Worker class for running predict() for each co-culture file loaded, and if more than one, merge the findings
-    """
-    finished_signal = pyqtSignal()  # Define a signal for completion
-    error_signal = pyqtSignal(str)
-
-    def __init__(self, PredictPanel=None):
-        super().__init__()
-        self.PredictPanel = PredictPanel  # Store the QWidget instance
-
-
-    def run_predict(self):
-        # try:
-        extra_stains = iterate_stains(self.PredictPanel)
-        self.PredictPanel.extra_stains = extra_stains if len(extra_stains) > 0 else None
-        print(extra_stains)
-
-        multiple_cocultures = True if self.PredictPanel.samples_number > 1 else False
-
-        # Get output directory for the predictions
-        self.PredictPanel.predict_dir = time_based_dir(
-            prefix="Prediction",
-            base_path=self.PredictPanel.file_panel.output_dir,
-            multiple_cocultures=multiple_cocultures
-        )
-        os.makedirs(self.PredictPanel.predict_dir, exist_ok=True)
-
-        # Loop over the coculture files and run predict()
-        for sample, data_df in self.PredictPanel.sample_to_df.items():
-
-            # Set data_df for the sample in process
-            self.PredictPanel.data_df = data_df
-            self.PredictPanel.sample = sample
-
-            # Run predict() for a single sample
-            predict(self.PredictPanel)
-
-        # Merge predictions in case of multiple coculture files
-        if multiple_cocultures:
-
-            print("Merge prediction of all samples into a single file.")
-            merge_prediction_results(self.PredictPanel.predict_dir, "prediction")
-
-            print("Merge prediction and uncertainties single file.")
-            merge_prediction_results(self.PredictPanel.predict_dir, "uncertainty")
-
-        self.finished_signal.emit()  # Emit the finished signal when done
-
-        # except Exception as e:
-        #     self.error_signal.emit(f"Error during prediction: {str(e)}")
