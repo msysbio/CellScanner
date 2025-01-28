@@ -4,6 +4,7 @@ import yaml
 import argparse
 import fcsparser
 from dataclasses import dataclass
+from typing import Optional
 from collections import defaultdict
 # Load CellScanner features
 from scripts.apply_umap import process_files
@@ -47,7 +48,11 @@ class CellScannerCLI():
 
             # Species files
             species_directories = conf.get("species_files").get("directories")
-            self.all_species_files, self.all_species = parse_dicts(species_directories, entity="species_files", names="species_names")
+            self.all_species_files, self.all_species = parse_dicts(
+                species_directories,
+                entity="species_files",
+                names="species_names"
+            )
 
             # Training parameters
             self.events = get_param_value("umap_events", conf)
@@ -77,10 +82,12 @@ class CellScannerCLI():
 
         # Gating parameters
         self.gating = get_param_value("gating", conf)
+        extra_stains = None
         if self.gating:
             self.stain_1 = get_stain_params("stain1", conf)
             self.stain_2 = get_stain_params("stain2", conf)
-
+            extra_stains = get_extra_stains(conf)
+        self.extra_stains = extra_stains
 
     def train_model(self):
 
@@ -138,10 +145,9 @@ class CellScannerCLI():
             if self.x_axis or self.y_axis or self.z_aixs not in data_df.columns:
                 self.x_axis, self.y_axis, self.z_axis = data_df.columns[:3]
 
-            self.cs_threshold = False
+            # Get thresholds for uncertainty filtering
             if self.filter_out_uncertain and self.uncertainty_threshold is None:
                 self.uncertainty_threshold = self.cs_uncertainty_threshold
-                self.cs_threshold = True
 
             # Define common parameters
             predict_params = {
@@ -158,7 +164,7 @@ class CellScannerCLI():
                 "scaling_constant": self.scaling_constant,
                 "filter_out_uncertain": self.filter_out_uncertain,
                 "uncertainty_threshold": self.uncertainty_threshold,
-                "cs_threshold": self.cs_threshold
+                "extra_stains": self.extra_stains
             }
 
             # Add specific parameters based on gating
@@ -272,6 +278,20 @@ def get_param_value(param, conf):
     return v
 
 
+def get_extra_stains(conf):
+
+    extra_stains = {}
+    extras = conf.get("extra_stains").get("stains")
+    for stain in  extras:
+        channel = stain.get("channel")
+        sign = stain.get("sign")
+        threshold = stain.get("value")
+        label = stain.get("label")
+        extra_stains[channel]  = (sign, threshold, label)
+
+    return extra_stains
+
+
 def get_stain_params(stain, conf):
     """
     Build a Stain instance based on the configuration file.
@@ -281,16 +301,17 @@ def get_stain_params(stain, conf):
     channel = params.get("channel")
     sign = params.get("sign")
     value = params.get("value")
+    return build_stain(stain, channel, sign, value)
 
+
+def build_stain(stain, channel, sign, value):
     # Check if all stain params are there
-    if not all([channel, sign, value]) and stain=="stain1":
+    if not all([sign, value]) and channel!=None:
         missing = [k for k, v in {"channel": channel, "sign": sign, "value": value}.items() if v is None]
         raise ValueError(f"Please provide {' and '.join(missing)} for {stain}.")
-    if stain=="stain2" and channel is not None:
-        missing = [k for k, v in {"sign": sign, "value": value}.items() if v is None]
-        raise ValueError(f"Please provide {' and '.join(missing)} for {stain}.")
 
-    return Stain(channel, sign, value)
+    return Stain(channel=channel, sign=sign, value=value)
+
 
 
 @dataclass
@@ -298,6 +319,7 @@ class Stain:
     channel: str
     sign: str
     value: float
+    label: Optional[str] = None
 
 
 if __name__ == "__main__":

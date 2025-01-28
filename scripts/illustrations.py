@@ -3,11 +3,21 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 
-def create_color_map(species_list):
+def create_color_map(alist):
     # Dynamically generate color map based on the number of species
-    color_map = {species: px.colors.qualitative.Set1[i % len(px.colors.qualitative.Set1)] for i, species in enumerate(species_list)}
+    color_map = {entity: px.colors.qualitative.Set1[i % len(px.colors.qualitative.Set1)] for i, entity in enumerate(alist)}
     return color_map
 
+def create_shape_map(alist):
+    shapes = ['circle', 'square', 'diamond', 'cross', 'x', 'triangle-up',
+              'triangle-down', 'triangle-left', 'triangle-right', 'pentagon',
+              'hexagon', 'hexagon2', 'octagon', 'star', 'star-triangle-up',
+              'star-triangle-down', 'star-square', 'star-diamond',
+              'diamond-tall', 'diamond-wide']
+    if len(alist) > 20:
+        raise ValueError(f"CellScanner can handle plots with up to 20 classes. A case with {len(alist)} was given.")
+    shape_map = {entity: shapes[i % len(shapes)] for i, entity in enumerate(alist)}
+    return shape_map
 
 def umap_plot(cleaned_data, embedding, model_dir, title, indices_to_keep=None):
     # Generate UMAP plot after filtering
@@ -126,57 +136,62 @@ def heterogeneity_bar_plot(labels, metrics_data, colors, heterogeneity_dir, samp
     fig2.write_html(bar_chart_path)
 
 
-def gating_plot(gated_data_df, species_names, x_axis, y_axis, z_axis, gated_dir, sample):
+def gating_plot(gated_data_df, species_names, x_axis, y_axis, z_axis, gated_dir, sample, all_labels):
 
-    # 3D plot creation for gated data
-    fig = go.Figure()
 
-    # Unique states and predictions for color
-    states = gated_data_df['state'].unique()
+    for label in all_labels:
 
-    # Color map
-    state_colors = {'live': 'skyblue',
-                    'inactive': 'firebrick',
-                    'debris': 'darkslategrey'
-    }
-    # Plot each combination of state and prediction
-    for state in states:
-        for species in species_names:
-            df_filtered = gated_data_df[(gated_data_df['state'] == state) & (gated_data_df['predictions'] == species)]
-            fig.add_trace(go.Scatter3d(
-                x=df_filtered[x_axis],
-                y=df_filtered[y_axis],
-                z=df_filtered[z_axis],
-                mode='markers',
-                marker=dict(
-                    size=1,
-                    symbol='circle',  # Markers for predictions
-                    color=state_colors[state],  # Color by state
+        # 3D plot creation for gated data
+        fig = go.Figure()
+
+        # Unique states and predictions for color
+        states = gated_data_df[label].unique()
+
+        # Color map
+        state_colors = create_color_map(states)
+        shape_map = create_shape_map(species_names)
+
+        # Plot each combination of state and prediction
+        for state in states:
+            for species in species_names:
+                df_filtered = gated_data_df[(gated_data_df[label] == state) & (gated_data_df['predictions'] == species)]
+                fig.add_trace(go.Scatter3d(
+                    x=df_filtered[x_axis],
+                    y=df_filtered[y_axis],
+                    z=df_filtered[z_axis],
+                    mode='markers',
+                    marker=dict(
+                        size=5,
+                        symbol=shape_map[species],  # Markers for predictions
+                        color=state_colors[state],  # Color by state
+                    ),
+                    name=f'{state} - {species}'
+                ))
+        # Layout adjustments
+        fig.update_layout(
+            title=f"3D Scatter Plot of Gated Data by State and Prediction for {label}",
+            scene=dict(
+                xaxis_title=x_axis,
+                yaxis_title=y_axis,
+                zaxis_title=z_axis
+            )
+        )
+        fig.update_layout(width=1000, height=800)
+
+        # Adjusting the legend size
+        fig.update_layout(
+            legend=dict(
+                title_font_size=20,
+                font=dict(
+                    size=17,
                 ),
-                name=f'{state} - {species}'
-            ))
-    # Layout adjustments
-    fig.update_layout(
-        title="3D Scatter Plot of Gated Data by State and Prediction",
-        scene=dict(
-            xaxis_title=x_axis,
-            yaxis_title=y_axis,
-            zaxis_title=z_axis
+            )
         )
-    )
-    fig.update_layout(width=1000, height=800)
-
-    # Adjusting the legend size
-    fig.update_layout(
-        legend=dict(
-            title_font_size=20,
-            font=dict(
-                size=17,
-            ),
+        # Save the gated 3D plot as an HTML file
+        plot_path = os.path.join(
+            gated_dir, "_".join([
+                sample,
+                "_".join([label, '3D_Gating_predictions_coculture.html'])
+            ])
         )
-    )
-    # Save the gated 3D plot as an HTML file
-    plot_path = os.path.join(
-        gated_dir, "_".join([sample,'3D_Gating_predictions_coculture.html'])
-    )
-    fig.write_html(plot_path)
+        fig.write_html(plot_path)

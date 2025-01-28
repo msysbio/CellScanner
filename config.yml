@@ -205,19 +205,21 @@ filter_out_uncertain:
   description: >
     Set true in case you wish to filter out uncertain predictions. 
     In case you wish to filter out uncertain predictions, an uncertainty threshold is required.
-    To this end, you can:
-    - set a threshold of your choice in the `threshold` parameter above
-    - leave the `threshold` parameter empty and CellScanner will compute the number of classes and set the threshold 
-    based on the threshold*max_entropy, where max entropy equals to log(number_of_classes), that returns the maximum accuracy.
-    please provide also a threshold of your choice. 
-    Thus, the lower the threshold, the stricter the filtering, the more uncertain predictions will be filtered out (assigned as Unknown).
+    Uncertainties are predicted using Shannon entropy and thus, the maximum entropy is log(number_of_classes).
+    Therefore, threshold may range from 0 to log(number_of_classes) and the lower the threshold, the stricter the filtering, 
+    the more uncertain predictions will be filtered out (assigned as Unknown).
+    You may set this value with one of the following ways:
+    - set any value between 0 and log(number_of_classes)
+    - set it to -1 and CellScanner will compute the generally used 0.5 threshold of the maximum entropy, and will use this as the threshold
+    - set its value as `true` and leave the `threshold` parameter empty. In this case, CellScanner will automatically set the threshold 
+    to the one that returns the maximum accuracy on your training set.
   type: bool
 
 # ---------------------
 # Gating parameters
 # ---------------------
 gating:
-  value: false
+  value: true
   required: false
   default: false
   description: >
@@ -225,20 +227,20 @@ gating:
   type: bool
 
 stain1:
-  channel:
+  channel: PI-A
   sign: greater_than
   sign_values:
     - greater_than
     - less_than
-  value: 45
+  value: 4
   required: false
   description: >
-    This parameter is required only when gating has been asked.
-    In that case, you need to provide 3 parameters to describe your stain:
-    The `channel`, that takes values the exact name of a column in the coculture file 
+    To enable gating, you need to provide at least one `Stain`; you will need 3 parameters to describe a stain:
+    The `channel`, that takes values the exact name of a column in the coculture file.
     The `sign`, that can be either greater_than or less_than, mentioning whether the channel 
-    needs to have either a higher or a lower value from the one you are about to set. 
+    needs to have a value higher or lower from the one you are about to set as threshold. 
     And last, the actual `value`, with the threshold of the stain.
+    This stain specifically describes the dead cells; all events where the threshold is met will be classified as dead.
   type:
     - channel: str
     - sign: str
@@ -253,13 +255,24 @@ stain2:
   value:
   required: false
   description: >
-    This parameter is optional even when gating has been asked, and it stands for debris.
-    Like in the `stain1` case, you need to provide 3 parameters to describe your stain:
-    The `channel`, that takes values the exact name of a column in the coculture file 
-    The `sign`, that can be either greater_than or less_than, mentioning whether the channel 
-    needs to have either a higher or a lower value from the one you are about to set. 
-    And last, the actual `value`, with the threshold of the stain.
+    This stain specifically describes total cells; all events where the threshold is met will be classified as cells.
+    The rest of the events will be classified as debris.
   type:
     - channel: str
     - sign: str
     - value: int
+
+extra_stains:
+  stains:
+    - stain:
+      channel: FL4-H
+      sign: greater_than
+      value: 5
+      label: kokla
+  required: false
+  description: >
+    If you would like to apply further/other stains, please provide the 3 required parameters for each.
+    In case you would like to have several, just copy-paste the `-stain` entry and the following 3 lines, as many times as you wish
+    and fill in the relative information for each stain.
+  type: list of multiple
+  default: none

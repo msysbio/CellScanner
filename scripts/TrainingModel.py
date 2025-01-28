@@ -42,6 +42,9 @@ class TrainModelPanel(QWidget):
         self.file_settings_group = QGroupBox("File Settings", self)
         file_settings_layout = QVBoxLayout(self.file_settings_group)
 
+        # Init cs uncertainty threshold to None
+        self.cs_uncertainty_threshold = None
+
         # Random Events Selection using QComboBox
         event_layout = QHBoxLayout()
         self.event_label = QLabel("Select number of random events:", self)
