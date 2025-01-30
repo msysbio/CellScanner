@@ -42,6 +42,9 @@ class TrainModelPanel(QWidget):
         self.file_settings_group = QGroupBox("File Settings", self)
         file_settings_layout = QVBoxLayout(self.file_settings_group)
 
+        # Init cs uncertainty threshold to None
+        self.cs_uncertainty_threshold = None
+
         # Random Events Selection using QComboBox
         event_layout = QHBoxLayout()
         self.event_label = QLabel("Select number of random events:", self)
@@ -135,7 +138,6 @@ class TrainModelPanel(QWidget):
 
         nn_layout.addLayout(scaling_constant_layout)
 
-
         # Add the NN group box to the main layout
         self.layout.addWidget(self.nn_group)
 
@@ -209,6 +211,7 @@ class TrainModelPanel(QWidget):
 
         # Keep a reference to best model
         self.best_model = None
+        # self.cs_threshold = None
 
     def start_loading_cursor(self):
         QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -246,7 +249,9 @@ class TrainModelPanel(QWidget):
 
     def on_finished(self):
         self.stop_loading_cursor()
-        QMessageBox.information(self, "Success", "Training process completed successfully.")
+        QMessageBox.information(self, "Success",
+            f"Training process completed successfully. Suggested thresholds equals to {self.cs_uncertainty_threshold}"
+        )
         self.thread = None
 
     def on_error(self, message):

@@ -74,8 +74,6 @@ Modules and Functions
         - `toggle_predict_panel()`: Shows or hides the prediction panel.
         - `choose_coculture_file()`: Facilitates the selection of coculture files and populates axis selection dropdowns with appropriate channels.
         - `run_prediction()`: Executes the prediction workflow, including loading models, predicting species, applying gating, performing heterogeneity analysis, and generating visualizations.
-        - `cleanup()`: Handles the removal of temporary files such as trained models and scalers upon application exit.
-        - `closeEvent(event)`: Overrides the default close event to ensure cleanup operations are performed.
         - `open_documentation()`: Opens the application's documentation webpage in the user's default web browser.
 
 4. **Main Application Loop**:
@@ -116,15 +114,12 @@ class NeuralNetworkGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("CellScanner")
-        self.setGeometry(100, 100, 500, 700)
+        self.setGeometry(100, 100, 700, 900)
 
         # Initialize model-related attributes
         self.model = None
         self.scaler = None
         self.label_encoder = None
-
-        # Register the cleanup function to remove saved files on exit
-        atexit.register(self.cleanup)
 
         # Central widget and layout
         central_widget = QWidget(self)
@@ -221,32 +216,6 @@ class NeuralNetworkGUI(QMainWindow):
         else:
             self.predict_panel.show()
 
-
-    def cleanup(self):
-        # Remove the saved model, scaler, and label encoder files, model statistics
-        try:
-            model_dir = get_abs_path('model/statistics')
-            files_to_remove = ['trained_model.keras', 'scaler.pkl', 'label_encoder.pkl',
-            'model_statistics.csv','model_statistics_kfold.csv','umap_after_filtering.html','umap_before_filtering.html']
-            for file_name in files_to_remove:
-                file_path = os.path.join(model_dir, file_name)
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                    print(f"{file_name} removed successfully.")
-        except Exception as e:
-            print(f"Error while deleting files: {e}")
-
-    def closeEvent(self, event):
-        # Call cleanup to remove saved files
-        self.cleanup()
-
-        # Delete the working directory and its contents when the app closes
-        try:
-            if os.path.exists(self.file_panel.working_directory):
-                shutil.rmtree(self.file_panel.working_directory)
-        except Exception as e:
-            print(f"Error while deleting working directory: {e}")
-        event.accept()
 
 # Main application loop
 if __name__ == "__main__":

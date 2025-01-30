@@ -71,3 +71,10 @@ def load_model_from_files(trained_model_dir):
     except Exception as e:
         print(f"Error loading model or preprocessing objects: {e}")
         raise ValueError(f"No valid model directory. Check whether all 3 required files are there and valid.")
+
+
+def create_file_path(output_dir, sample, name, extension):
+    """Helper function to create file paths."""
+    if sample:
+        return os.path.join(output_dir, f"{sample}_{name}.{extension}")
+    return os.path.join(output_dir, f"{name}.{extension}")
