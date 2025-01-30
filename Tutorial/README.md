@@ -38,7 +38,7 @@ The prediction should also happen within one minute. The output is stored in a f
 For each coculture, the following files are generated: 
 
 - prediction_counts.csv, which contains the predicted counts for debris (blank), for each species, and also for the unknown events if uncertainty thresholding was enabled
-- raw_predictions.csv, which is the fc file extended with prediction results (labels and 
+- raw_predictions.csv, which is the fc file extended with prediction results (labels and, if enabled, uncertainties) 
 - uncertainty_counts.csv, which lists the number of uncertain events per label if uncertainty thresholding was enabled
 - 3D_coculture_predictions_species.html plots events in a 3D plot spanned by the three selected flow cytometer channels and colors them by species
 - 3D_coculture_predictions_uncertainty.html is the same with events colored by prediction uncertainty
