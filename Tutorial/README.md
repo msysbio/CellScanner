@@ -18,21 +18,21 @@ When you open CellScanner, you see the graphical user interface (GUI) shown belo
 ## Import Data
 The first step is to import the data. You can do this by clicking on **"Import Data"**. You can select blank cultures and mono-cultures by clicking on the corresponding fc files. Note that **you can select several files at once**! Optionally, you can also specify an output directory where results will be saved. If you do not specify one, results will go in an output folder created on the fly inside the CellScanner directory. If you previously trained a model for your data, you can also re-use it. Here, we work with two blank files and three biological replicates for each monoculture, with the samples collected at 50 hours. 
 
-![import data](Images/Import_data_step.pdf) 
+![import data](Images/Import_data_step.png) 
 
 ## Train Model
 Next, we open the **"Train Model"** panel. If the CellScanner window becomes too big for your screen, close the "Import Data" panel. Here, we are going to use default values as shown below. UMAP is run first to remove debris. Essentially, this is done by clustering events from blanks and monocultures and then removing events from monocultures that are too similar to events in blanks. Next, a neural model is trained on the filtered monocultures.
 
 TODO: gating based on stains to be explained here
 
-![train model](Images/Train_model_step.pdf) 
+![train model](Images/Train_model_step.png) 
 
 Model training should be fast (within one minute). Model performance files will be stored in a sub-folder in your specified output folder (if you did not specify one, then in the CellScanner folder). The sub-folder name starts with *working_files* and ends with a time stamp. It contains another folder called "model", in which you will find a number of files encoding the trained neural network, a file called *model_statistics.csv* and two html files, which will open in your browser when clicked. The first shows a UMAP projection before and the second one after filtering. An event is filtered if its neighbors in the UMAP embedding do not have the same label (the number of neighbors considered is among CellScanner's parameters). The "model_statistics.csv" file contains information about classification performance, including accuracy, precision, recall, F1 score and the confusion matrix. 
 
 ## Run prediction
 We are now ready to apply the trained neural network on one or several cocultures. For this, we open the **"Run Prediction"** panel by clicking on it. As with monocultures, several coculture files can be selected and imported at once. If more than coculture is selected, the trained neural network will be applied to each of them in turn. **Optionally, the "uncertainty" thresholding can be enabled** by clicking the box next to "Apply filtering on the predictions based on their uncertainty scores". Events that cannot be easily assigned to one species have a high uncertainty (entropy). CellScanner automatically computes an uncertainty threshold that maximises model performance. If uncertainty thresholding is enabled, events with uncertainty above this threshold will be filtered out. Note that the threshold can also be altered by the user. Next, the user can specify three flow cytometer channels to be used in the visualisation. Clicking "Predict" will then launch the prediction step. 
 
-![train model](Images/Run_prediction_step.pdf) 
+![train model](Images/Run_prediction_step.png) 
 
 The prediction should also happen within one minute. The output is stored in a folder called "Prediction" (followed by a time stamp) that is either located in the specified output folder or the CellScanner folder.
 For each coculture, the following files are generated: 
