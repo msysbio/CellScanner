@@ -2,7 +2,7 @@
 
 ## Introduction
 For the tutorial, we will use flow cytometry files coming from a growth experiment with two gut bacterial species, *Roseburia intestinalis* (RI) and *Bacteroides thetaiotaomicron* (BT). These two species were grown in mono- and in co-culture for up to 120 hours, as shown below:
-![growth curves](Images/growthcurves.pdf) 
+![growth curves](Images/growthcurves.png) 
 
 In this experiment, dead/live staining with propidium iodide and SYBR-Green was applied. Propidium iodide is a stain that enters cells with broken membranes, which we therefore count as dead. SYBR-Green is a DNA-binding molecule that helps distinguish cells from background particles that do not contain DNA. Thus, viable cells should stain green and not red.
 
