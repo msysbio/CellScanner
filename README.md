@@ -34,7 +34,7 @@ python Cellscanner.py
 This will pop-up CellScanner where you can now import your data, fill in your training parameters and 
 predict your species. 
 
-![gui_main](./GUI.png)
+![gui_main](docs/_static/GUI.png)
 
 
 Keep in mind that the CellScanner GUI is a PyQt5 app, meaning it requires from the host to have a working X11 windowing system.
