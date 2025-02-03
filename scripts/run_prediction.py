@@ -8,7 +8,7 @@ from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics import pairwise_distances
 from scipy.stats import entropy
 
-from .helpers import create_file_path
+from .helpers import create_file_path, get_stains_from_panel
 from .illustrations import species_plot, uncertainty_plot, heterogeneity_pie_chart, heterogeneity_bar_plot, gating_plot, create_color_map
 
 # Main function to be called from the worker
@@ -42,21 +42,10 @@ def predict(PredictionPanel=None, **kwargs):
         uncertainty_threshold = float(PredictionPanel.uncertainty_threshold.value()) if filter_out_uncertain else None
 
         if gating:
-            # Stain 1
-            stain1 = PredictionPanel.stain1_combo.currentText()  # It should be the column name
-            if stain1 != "Not applicable":
-                stain1_relation = PredictionPanel.stain1_relation.currentText()
-                stain1_threshold = float(PredictionPanel.stain1_threshold.text())
-            else:
-                stain1 = None
-            # Stain 2
-            stain2 = PredictionPanel.stain2_combo.currentText()  # It should be the column name
-            if stain2 != "Not applicable":
-                stain2_relation = PredictionPanel.stain2_relation.currentText()
-                stain2_threshold = float(PredictionPanel.stain2_threshold.text()) if PredictionPanel.stain2_threshold.text() else None
-                extra_stains = PredictionPanel.extra_stains
-            else:
-                stain2 = None
+            # Stains 1 and 2 for live/dead and cell/not cells
+            stain1, stain2 = get_stains_from_panel(PredictionPanel)
+            # Extra stains
+            extra_stains = PredictionPanel.extra_stains
         gui = True
 
     else:
@@ -74,10 +63,7 @@ def predict(PredictionPanel=None, **kwargs):
         filter_out_uncertain = kwargs["filter_out_uncertain"]
         uncertainty_threshold = kwargs["uncertainty_threshold"]
         if gating:
-            Stain1 = kwargs["stain1"]
-            stain1, stain1_relation, stain1_threshold = Stain1.channel, Stain1.sign, Stain1.value
-            Stain2 = kwargs["stain2"]
-            stain2, stain2_relation, stain2_threshold = Stain2.channel, Stain2.sign, Stain2.value
+            stain1, stain2 = kwargs["stain1"], kwargs["stain2"]
             extra_stains = kwargs["extra_stains"]
 
     # Get uncertainty threshold
@@ -140,9 +126,10 @@ def predict(PredictionPanel=None, **kwargs):
     if gating:
         # Apply gating
         gating_df, all_labels = apply_gating(data_df_pred,
-            stain1, stain1_relation, stain1_threshold,
-            stain2, stain2_relation, stain2_threshold,
-            scaling_constant, extra_stains
+            stain1,
+            stain2,
+            # scaling_constant,
+            extra_stains
         )
         # Save gating results
         save_gating_results(
@@ -151,12 +138,13 @@ def predict(PredictionPanel=None, **kwargs):
             all_labels
         )
         # Perform heterogeneity analysis
-        hetero_df = gating_df[gating_df['state'] == 'live'] if "state" in all_labels else gating_df
+        hetero_df = gating_df.drop(columns=all_labels)
 
     else:
         hetero_df = data_df_pred.copy()
 
     # Calculate heterogeneity
+
     run_heterogeneity(hetero_df, species_list, output_dir, sample)
 
     if not gui:
@@ -198,9 +186,9 @@ def predict_species(data_df, model, scaler, label_encoder, scaling_constant):
 
 
 def apply_gating(data_df,
-                 stain1, stain1_relation, stain1_threshold,
-                 stain2=None, stain2_relation=None, stain2_threshold=None,
-                 scaling_constant=150,
+                 stain1=None,
+                 stain2=None,
+                #  scaling_constant=150,
                  extra_stains=None
     ):
 
@@ -212,44 +200,38 @@ def apply_gating(data_df,
     # Temporarily remove the 'predictions' column to avoid issues with numeric operations
     predictions_column = gated_data_df.pop('predictions') if 'predictions' in gated_data_df.columns else None
 
-    # Apply arcsinh transformation with a cofactor
-    cofactor = scaling_constant  # Cofactor
-
-    for column in gated_data_df.select_dtypes(include=[np.number]).columns:
-        gated_data_df[column] = np.arcsinh(gated_data_df[column] / cofactor)
-
     # Reintegrate the 'predictions' column after the arcsinh transformation
     if predictions_column is not None:
         gated_data_df['predictions'] = predictions_column
 
-    if stain1 is not None:
+    if stain1.channel is not None:
 
         # Initialize the 'state' column with 'not dead'
         gated_data_df['dead'] = False
         # Apply gating based on the first stain (live/dead)
-        if stain1_relation in ['>', 'greater_than']:
-            gated_data_df.loc[gated_data_df[stain1] > stain1_threshold, 'dead'] = True
-        elif stain1_relation in ['<', 'less_than']:
-            gated_data_df.loc[gated_data_df[stain1] < stain1_threshold, 'dead'] = True
+        if stain1.sign in ['>', 'greater_than']:
+            gated_data_df.loc[gated_data_df[stain1.channel] > stain1.value, 'dead'] = True
+        elif stain1.sign in ['<', 'less_than']:
+            gated_data_df.loc[gated_data_df[stain1.channel] < stain1.value, 'dead'] = True
         # Sannity check
-        stain_sannity_check(gated_data_df, "dead", stain1, stain1_relation, stain1_threshold)
+        stain_sannity_check(gated_data_df, "dead", stain1.channel, stain1.sign, stain1.value)
         all_labels.append("dead")
 
-    if stain2 is not None:
+    if stain2.channel is not None:
 
         # Initialize the 'state' column with 'not dead'
         gated_data_df['cell'] = False
         # Apply gating based on the first stain (live/dead)
-        if stain2_relation in ['>', 'greater_than']:
-            gated_data_df.loc[gated_data_df[stain2] > stain2_threshold, 'cell'] = True
-        elif stain2_relation in ['<', 'less_than']:
-            gated_data_df.loc[gated_data_df[stain2] < stain2_threshold, 'cell'] = True
+        if stain2.sign in ['>', 'greater_than']:
+            gated_data_df.loc[gated_data_df[stain2.channel] > stain2.value, 'cell'] = True
+        elif stain2.sign in ['<', 'less_than']:
+            gated_data_df.loc[gated_data_df[stain2.channel] < stain2.value, 'cell'] = True
         # Sannity check
-        stain_sannity_check(gated_data_df, "cell", stain2, stain2_relation, stain2_threshold)
+        stain_sannity_check(gated_data_df, "cell", stain2.channel, stain2.sign, stain2.value)
         all_labels.append("cell")
 
     # Apply gating based on the second stain (debris)
-    if stain2 and stain2_threshold and stain1:
+    if stain2.channel and stain2.value and stain1.channel:
 
         gated_data_df["state"] = "debris"
 
@@ -262,9 +244,6 @@ def apply_gating(data_df,
         ] = "inactive"
 
         all_labels.append("state")
-
-
-    gated_data_df.to_csv("~/Desktop/gated.csv", sep="\t")
 
     # Apply gating on extra stains
     if extra_stains is not None:
@@ -425,7 +404,7 @@ def run_heterogeneity(df, species_list, output_dir, sample):
         df = hetero_df[hetero_df['predictions'] == species]
         try:
             hetero1 = hetero_simple(df.iloc[:, :-1])
-            hetero2 = hetero_mini_batch(df.iloc[:, :-1])
+            hetero2 = hetero_mini_batch(df.iloc[:, :-1], species)
             save_heterogeneity_plots(hetero1, hetero2, heterogeneity_dir, sample, species)
         except ValueError as e:
             raise ValueError("Error calculating heterogeneity.") from e
@@ -439,8 +418,13 @@ def hetero_simple(data):
     return np.sum(ranges.mean())
 
 
-def hetero_mini_batch(data, type='av_diss'):
+def hetero_mini_batch(data, species=None, type='av_diss'):
     # Use MiniBatchKMeans as an alternative
+    if data.shape[0] == 0:
+        if species == None:
+            species = "global"
+        print(f"No data for heterogeneity test for species {species}.")
+        return np.nan
     try:
         kmeans = MiniBatchKMeans(n_clusters=1, batch_size=3080, n_init=3).fit(data)
     except ValueError:

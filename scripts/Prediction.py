@@ -112,13 +112,19 @@ class PredictionPanel(QWidget):
             "When staining for both inactive and total cells, CellScanner will also return the living cells, by combining findings from these 2 stains."
         )
         self.gating_layout.addChildWidget(self.gating_checkbox)
-
-        # # Create dynamic layout for stain inputs
-        # self.dynamic_layout = QVBoxLayout()
-        # self.predict_panel_layout.addLayout(self.dynamic_layout)
-
         self.gating_checkbox.stateChanged.connect(self.toggle_gating_options)
         self.predict_panel_layout.addWidget(self.gating_checkbox)
+
+        # Add message for strain thresholds
+        self.thresholds_layout = QHBoxLayout()
+        self.threshold_message = QLabel(
+            "Important: Some visualization software may transform raw data. \n"
+            "Ensure you set the threshold based on the raw data, not post-transformation.\n",
+            self
+        )
+        self.thresholds_layout.addWidget(self.threshold_message)
+        self.predict_panel_layout.addLayout(self.thresholds_layout)
+
 
         # Stain 1 selection (for live/dead)
         tooltip_for_stain_1 = (
@@ -211,7 +217,6 @@ class PredictionPanel(QWidget):
         except Exception as e:
             self.on_error(str(e))
 
-
     def choose_coculture_file(self):
         select_coculture_message = ["Select Coculture File", "", "Flow Cytometry Files (*.fcs);;All Files (*)"]
         coculture_filepath, _ = QFileDialog.getOpenFileNames(self, *select_coculture_message)
@@ -263,7 +268,6 @@ class PredictionPanel(QWidget):
             print("No coculture file selected.")
             self.choose_coculture_file_button.setText(select_coculture_message[0])
 
-
     def on_error(self, message):
         self.stop_loading_cursor()
         QMessageBox.critical(self, "Error", message)
@@ -272,16 +276,13 @@ class PredictionPanel(QWidget):
     def start_loading_cursor(self):
         QApplication.setOverrideCursor(Qt.WaitCursor)
 
-
     def stop_loading_cursor(self):
         QApplication.restoreOverrideCursor()
-
 
     def prediction_completed(self):
         self.stop_loading_cursor()
         QMessageBox.information(self, "Prediction Complete", f"Predictions have been saved in {self.predict_dir}.")
         self.thread = None
-
 
     def toggle_gating_options(self):
         # Show or hide gating options based on checkbox state
@@ -295,6 +296,7 @@ class PredictionPanel(QWidget):
         self.stain2_relation.setVisible(is_checked)
         self.stain2_threshold.setVisible(is_checked)
         self.new_stain_button.setVisible(is_checked)
+        self.threshold_message.setVisible(is_checked)
 
 
     def toggle_uncertainty_filterint_options(self):

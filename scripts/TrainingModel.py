@@ -56,12 +56,22 @@ class TrainModelPanel(QWidget):
         self.event_combo.addItems(
             [str(i) for i in range(1000, 100000, 5000)]
         )  # Adds 1000, 2000, ..., up to 95,000
-
         event_layout.addWidget(self.event_label)
         event_layout.addWidget(self.event_combo)
 
+        # Message for gating parameters
+        gating_layout = QHBoxLayout()
+        message_for_gating = QLabel(
+            "If you plan to apply line gating for live/dead cells and/or cells vs. debris during the prediction step,\n"
+            "please enter the relevant parameters in the designated boxes within the Prediction panel.\n"
+            "CellScanner will incorporate stainings for inactive and total cells to enhance model training.",
+            self
+        )
+        gating_layout.addWidget(message_for_gating)
+
         # Add the event_layout into file_settings_layout, then add file_settings_group to the main layout.
         file_settings_layout.addLayout(event_layout)
+        file_settings_layout.addLayout(gating_layout)
         self.layout.addWidget(self.file_settings_group)
 
         # UMAP Settings GroupBox
@@ -211,7 +221,7 @@ class TrainModelPanel(QWidget):
 
         # Keep a reference to best model
         self.best_model = None
-        # self.cs_threshold = None
+
 
     def start_loading_cursor(self):
         QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -219,7 +229,11 @@ class TrainModelPanel(QWidget):
     def stop_loading_cursor(self):
         QApplication.restoreOverrideCursor()
 
+
     def start_training_process(self):
+        # Load predict panel attributes to enable gating
+        self.predict_panel = self.parent().parent().predict_panel
+
         try:
             #start the loading cursor
             self.start_loading_cursor()
@@ -246,6 +260,7 @@ class TrainModelPanel(QWidget):
         except Exception as e:
            self.on_error(str(e))
            self.stop_loading_cursor()
+
 
     def on_finished(self):
         self.stop_loading_cursor()

@@ -1,6 +1,8 @@
 import os
 import sys
 from datetime import datetime
+from dataclasses import dataclass
+from typing import Optional
 
 def get_app_dir():
     """Get absolute path relative to the executable location."""
@@ -78,3 +80,45 @@ def create_file_path(output_dir, sample, name, extension):
     if sample:
         return os.path.join(output_dir, f"{sample}_{name}.{extension}")
     return os.path.join(output_dir, f"{name}.{extension}")
+
+
+def get_stains_from_panel(PredictionPanel):
+    """
+    Build Stain instances for the two main stain types of living/dead and cells/not cells cases.
+    In this case, no label is part of the Stain instance.
+    Function to be used only in the GUI framework.
+
+    Arguments:
+        PredictionPanel:
+    Returns:
+        stain1 (Stain)
+        stain2 (Stain)
+    """
+    # Stain 1
+    stain_1 = PredictionPanel.stain1_combo.currentText()  # It should be the column name
+    if stain_1 != "Not applicable":
+        stain1_channel = stain1
+        stain1_relation = PredictionPanel.stain1_relation.currentText()
+        stain1_threshold = float(PredictionPanel.stain1_threshold.text())
+        stain_1 = Stain(stain1_channel, stain1_relation, stain1_threshold)
+    else:
+        stain1 = None
+    # Stain 2
+    stain_2 = PredictionPanel.stain2_combo.currentText()  # It should be the column name
+    if stain_2 != "Not applicable":
+        stain2_channel = stain_2
+        stain2_relation = PredictionPanel.stain2_relation.currentText()
+        stain2_threshold = float(PredictionPanel.stain2_threshold.text()) if PredictionPanel.stain2_threshold.text() else None
+        stain2 = Stain(stain2_channel, stain2_relation, stain2_threshold)
+    else:
+        stain2 = None
+    return stain1, stain2
+
+
+@dataclass
+class Stain:
+    channel: str
+    sign: str
+    value: float
+    label: Optional[str] = None
+
