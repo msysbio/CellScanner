@@ -359,8 +359,5 @@ def calculate_threshold(uncertainties, y_pred_classes, y_true_classes, species_n
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
                 best_threshold = threshold
-    import json
-    with open("all_thresholds_reports.json", 'w') as f:
-        json.dump(threshold_report, f)
 
     return best_threshold

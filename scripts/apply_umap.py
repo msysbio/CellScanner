@@ -3,19 +3,36 @@ import umap
 import fcsparser
 import pandas as pd
 import numpy as np
+from dataclasses import dataclass
 from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import NearestNeighbors
 import plotly.express as px
 from .nn import prepare_for_training
-from .helpers import get_abs_path
+from .helpers import Stain, get_stains_from_panel
 from .illustrations import umap_plot
+from .run_prediction import apply_gating
 
 
-def process_file(file, species_name, n_events):
-
+def process_file(file, species_name, n_events, stain_1, stain_2
+                #  , scaling_constant=150
+    ):
     _, df = fcsparser.parse(file, reformat_meta=True)
     if 'Time' in df.columns:
         df = df.drop(columns=['Time'])  # Remove Time column
+
+    if stain_1.channel is not None or stain_2.channel is not None:
+        # Apply gating
+        gated_df, _ = apply_gating(df,
+            stain_1, stain_2,
+            # scaling_constant
+        )
+        if stain_1.channel is not None:
+            df = df[gated_df["dead"] == False]
+        if stain_2.channel is not None:
+            df = df[gated_df["cell"] == True]
+    else:
+        print("No gating for the training step.")
+
     sampled_df = df.sample(n=min(n_events, len(df)))
     sampled_df['Species'] = species_name
 
@@ -38,17 +55,25 @@ def process_files(TrainPanel=None, **kwargs):
             "blank_threshold": int(TrainPanel.nn_blank_combo.currentText()),
             "species_files_names_dict": TrainPanel.file_panel.species_files,
             "blank_files": TrainPanel.file_panel.blank_files,
-            "working_directory": TrainPanel.file_panel.working_directory
+            "working_directory": TrainPanel.file_panel.working_directory,
+
         }
+        gating = TrainPanel.predict_panel.gating_checkbox.isChecked()
+        if gating:
+            stain_1, stain_2 = get_stains_from_panel(TrainPanel.predict_panel)
+        else:
+            stain_1, stain_2 = None, None
         gui = True
     else:
         # Read parameters from kwargs
         required_keys = [
             "n_events", "umap_n_neighbors", "umap_min_dist",
             "blank_files", "blank_threshold", "nonblank_threshold",
-            "species_files_names_dict", "working_directory"
+            "species_files_names_dict", "working_directory",
+            "stain_1", "stain_2"
         ]
         params = {key: kwargs[key] for key in required_keys}
+        stain_1, stain_2 = params["stain_1"], params["stain_2"]
 
     # Extract parameters into variables for later use
     n_events = params["n_events"]
@@ -67,7 +92,11 @@ def process_files(TrainPanel=None, **kwargs):
         for sp_file in species_files:
             try:
                 species_dataframes.append(
-                    process_file(file=sp_file, species_name=species_name, n_events=n_events)
+                    process_file(
+                        file=sp_file, species_name=species_name,
+                        n_events=n_events,
+                        stain_1=stain_1, stain_2=stain_2
+                    )
                 )
             except Exception as e:
                 print(f"Error processing file {sp_file}: {e}")
@@ -75,10 +104,13 @@ def process_files(TrainPanel=None, **kwargs):
 
     # Process blanks
     blank_dataframes = []
+    blank_stain = Stain(channel=None, sign=None, value=None)
     for blank_file in blank_files:
         try:
             blank_dataframes.append(
-                process_file(file=blank_file, species_name='Blank', n_events=n_events)
+                process_file(
+                    file=blank_file, species_name='Blank', n_events=n_events,
+                    stain_1=blank_stain, stain_2=blank_stain)
             )
         except Exception as e:
             print(f"Error processing blank file {blank_file}: {e}")
@@ -91,6 +123,7 @@ def process_files(TrainPanel=None, **kwargs):
     scaled_data_subset = StandardScaler().fit_transform(data_subset)
 
     # Dimensionality reduction using UMAP
+    print("Build UMAP reducer")
     reducer = umap.UMAP(
         n_components=3,
         n_neighbors=umap_n_neighbors,
@@ -111,8 +144,13 @@ def process_files(TrainPanel=None, **kwargs):
     umap_plot(combined_df, embedding, model_dir, "Before", None)
 
     # Nearest Neighbors filtering
+    print("Instantiate the Nearest Neighbors Model")
     nn = NearestNeighbors(n_neighbors=50)
+
+    print("Fit the Model to the Data")
     nn.fit(embedding)
+
+    print("Find Nearest Neighbors")
     _, indices = nn.kneighbors(embedding)
     indices_to_keep = []
 

@@ -81,7 +81,7 @@ species_files:
           - RI_mono_48h_100.fcs
           - BT_mono_48h_100.fcs
         species_names:
-          - Bacteroides
+          - Blautia
           - Faecalibacterium
           - Roseburia
           - Bacteroides

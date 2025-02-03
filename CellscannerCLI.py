@@ -3,14 +3,12 @@ import sys
 import yaml
 import argparse
 import fcsparser
-from dataclasses import dataclass
-from typing import Optional
 from collections import defaultdict
 # Load CellScanner features
 from scripts.apply_umap import process_files
 from scripts.nn import prepare_for_training, train_neural_network
 from scripts.run_prediction import predict, merge_prediction_results
-from scripts.helpers import get_app_dir, time_based_dir, load_model_from_files
+from scripts.helpers import get_app_dir, time_based_dir, load_model_from_files, Stain
 
 class CellScannerCLI():
 
@@ -82,22 +80,22 @@ class CellScannerCLI():
 
         # Gating parameters
         self.gating = get_param_value("gating", conf)
-        extra_stains = None
+        self.stain_1, self.stain_2, self.extra_stains = None, None, None
         if self.gating:
             self.stain_1 = get_stain_params("stain1", conf)
             self.stain_2 = get_stain_params("stain2", conf)
-            extra_stains = get_extra_stains(conf)
-        self.extra_stains = extra_stains
+            self.extra_stains = get_extra_stains(conf)
 
     def train_model(self):
-
+        print("\nAbout to preprocess input files.")
         cleaned_data = process_files(
             n_events = self.events, umap_n_neighbors=self.n_neighbors,
             umap_min_dist=self.umap_min_dist, nonblank_threshold=self.nn_non_blank,
             blank_threshold=self.nn_blank, species_files_names_dict=self.all_species,
-            blank_files=self.blank_files, working_directory=self.output_dir
+            blank_files=self.blank_files, working_directory=self.output_dir,
+            stain_1=self.stain_1, stain_2=self.stain_2
         )
-
+        print("Files processed. Preparing for training:")
         X_whitened, y_categorical, self.scaler, self.le = prepare_for_training(
             cleaned_data=cleaned_data,
             scaler=self.scaler,
@@ -105,7 +103,7 @@ class CellScannerCLI():
             scaling_constant=self.scaling_constant,
             working_directory=self.output_dir
         )
-
+        print("Read to train the model..")
         self.model, self.cs_uncertainty_threshold = train_neural_network(
             fold_count=self.folds,
             epochs=self.epochs,
@@ -116,9 +114,12 @@ class CellScannerCLI():
             species_names=self.le.classes_,
             working_directory=self.output_dir
         )
+        print("Model complete!")
 
 
     def predict_coculture(self):
+
+        print("About to start predicting co-culture profiles.")
 
         if not all([self.model, self.scaler, self.le]):
             raise ValueError("Please ensure a trained model, scaler, and label encoder are provided before predicting cocultures.")
@@ -312,14 +313,6 @@ def build_stain(stain, channel, sign, value):
 
     return Stain(channel=channel, sign=sign, value=value)
 
-
-
-@dataclass
-class Stain:
-    channel: str
-    sign: str
-    value: float
-    label: Optional[str] = None
 
 
 if __name__ == "__main__":
