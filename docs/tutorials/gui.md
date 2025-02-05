@@ -27,7 +27,8 @@ When you open CellScanner, you see the graphical user interface (GUI) shown belo
 ![GUI](../_static//GUI.png)
 
 ## Import Data
-The first step is to import the data. You can do this by clicking on **"Import Data"**. You can select blank cultures and mono-cultures by clicking on the corresponding fc files. Note that **you can select several files at once**! 
+The first step is to import the data. You can do this by clicking on **"Import Data"**. When you click the *Select blank file* button, you can navigate to the corresponding fcs files. When you click the *Add Species* button, a new button appears next to a text field that allows you to assign the name to the fcs files belonging to the same species.
+Note that **you can select several files at once** for both blank and mono-culture files! 
 Optionally, you can also specify an output directory where results will be saved. 
 If you do not specify one, results will go in an output folder created on the fly inside the CellScanner directory. 
 If you previously trained a model for your data, you can also re-use it. Here, we work with two blank files and three biological replicates for each monoculture, with the samples collected at 50 hours. 
