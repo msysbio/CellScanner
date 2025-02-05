@@ -36,14 +36,19 @@ If you previously trained a model for your data, you can also re-use it. Here, w
 ![import data](../_static//Import_data_step.png) 
 
 ## Train Model
-Next, we open the ***Train Model*** panel. 
-If the CellScanner window becomes too big for your screen, close the ***Import Data*** panel. 
+Next, we open the **Train Model** panel. 
+If the CellScanner window becomes too big for your screen, close the **Import Data** panel. 
 Here, we are going to use default values as shown below. 
 UMAP is run first to remove debris. 
 Essentially, this is done by clustering events from blanks and monocultures and then removing events from monocultures that are too similar to events in blanks. 
-Next, a neural model is trained on the filtered monocultures.
+Next, a model (here a neural network) is trained on the filtered monocultures.
 
-TODO: gating based on stains to be explained here
+Optionally, you can apply gating to the mono-cultures. If you wish to do so, please open the **Run prediction** panel and click the *Apply line gating* checkbox. In this example, samples were treated with SYBR Green and propidium iodide. The latter is not membrane-permeable and is a red flurescent stain. Thus, it can enter cells only if their membrane is ruptured and cells stained red are therefore treated as dead.
+In contrast, SYBR Green is a membrane-permeable green fluorescent stain that binds to DNA. Thus, any event that is not green does not contain DNA and should better not be counted as a cell. The thresholds have to be specified as a function of the intensity values for the corresponding channels in mono- and cocultures. Usually, the software accompanying your flow cytometer can visualise intensities in different channels as histograms and scatter plots, thereby helping you to select thresholds. Here, we will set the thresholds as follows:
+
+- Staining inactive cells: FL2-H > 2000000
+- Staining all cells: FL1-A > 500000
+
 
 ![train model](../_static//Train_model_step.png) 
 
@@ -57,17 +62,21 @@ The `model_statistics.csv` file contains information about classification perfor
 
 ## Run prediction
 We are now ready to apply the trained neural network on one or several cocultures. 
-For this, we open the ***Run Prediction*** panel by clicking on it. 
+For this, we open the **Run Prediction** panel by clicking on it. 
 As with monocultures, several coculture files can be selected and imported at once. 
 If more than one coculture is selected, the trained neural network will be applied to each coculture in turn. 
 Here, we are importing six replicates of the coculture (btriA-F). 
 **Optionally, the "uncertainty" thresholding can be enabled** by clicking the box next to 
 *"Apply filtering on the predictions based on their uncertainty scores"*. 
-Events that cannot be easily assigned to one species have a high **uncertainty** (entropy). 
+Events that cannot be easily assigned to one species have a high **uncertainty** (entropy).
 CellScanner automatically computes an uncertainty threshold that maximizes model performance. 
 If uncertainty thresholding is enabled, events with uncertainty above this threshold will be filtered out. 
 Note that the threshold can be manually adjusted. 
 Next, we specify three flow cytometer channels to be used in the visualization. 
+
+We can also **optionally** use the line gating that we already appplied to the monocultures, which will prefilter fcs files before UMAP. In this example, FL1 and FL2 are the green and red channel, respectively, whereas H and A are height and area of the light signal. All events with FL2-H values above the threshold will be treated as dead cells and removed. All events with FL1-A values above the threshold will be counted as cells, so events below it will be removed as DNA-free debris. This implements a simple line gating as shown in the scatter plot below for one coculture. Of note, the same thresholds are applied to all mono- and cocultures and should therefore be carefully selected based on visual inspection of intensities in corresponding fcs files.
+![line gating](../_static//line_gating.png)
+
 Clicking *"Predict"* will then launch the prediction step. 
 
 ![train model](../_static//Run_prediction_step.png) 
