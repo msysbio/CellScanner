@@ -1,14 +1,3 @@
-#Prediction.py
-import os
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox,\
-    QGroupBox, QLabel, QMessageBox, QLineEdit, QCheckBox, QFileDialog, QDoubleSpinBox
-from PyQt5.QtGui import QDoubleValidator
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject
-import numpy as np
-import fcsparser
-from .helpers import button_style, time_based_dir
-from .run_prediction import predict, merge_prediction_results
-
 """
 This script is used within the CellScanner application to predict species in coculture samples, apply gating for live/dead or debris
 classification, and perform heterogeneity analysis.
@@ -20,25 +9,41 @@ Key Features:
 - Performs heterogeneity analysis using simple and MiniBatchKMeans clustering approaches.
 - Generates and saves heterogeneity plots as HTML files.
 
-Functions:
-- predict_species(data_df, model, scaler): Applies transformations and predicts species using a trained model.
-- apply_gating(data_df, stain1, stain1_relation, stain1_threshold, stain2=None, ...): Applies gating to classify cells.
-- save_prediction_results(predicted_classes, data_df, ...): Saves the prediction results and generates a 3D scatter plot.
-- save_gating_results(gated_data_df, output_dir, ...): Saves the gating results and generates a 3D scatter plot.
-- hetero_simple(data): Calculates simple heterogeneity as the sum of mean ranges across all channels.
-- hetero_mini_batch(data, type='av_diss'): Computes heterogeneity using MiniBatchKMeans clustering.
-- save_heterogeneity_plots(hetero1, hetero2, output_dir): Generates and saves pie and bar charts for heterogeneity measures.
+Authors:
+    - Ermis Ioannis Michail Delopoulos
+    - Haris Zafeiropoulos
 
-Authors: Ermis Ioannis Michail Delopoulos
 Date: 2024 - 2025
 """
+from PyQt5.QtWidgets import (
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox,
+    QGroupBox, QLabel, QMessageBox, QLineEdit, QCheckBox, QFileDialog, QDoubleSpinBox
+)
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject
 
-class PredictionPanel(QWidget):
+import os
+import fcsparser
+import numpy as np
+
+from .helpers import button_style, time_based_dir
+from .run_prediction import predict, merge_prediction_results
+from .GUIhelpers import AxisSelector, LiveDeadDebrisSelectors, GatingMixin, GatingCheckBox, GuiMessages, iterate_stains
+
+
+class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelectors):
+    """
+    The prediction panel of the CellScanner GUI enabling the user to provide files and parameters for predicting
+    co-culture data.
+    """
     def __init__(self, file_panel, train_panel, parent=None):
+
         super().__init__(parent)
+
+        # Allow using ImportFilePanel and TrainModelPanel attributes directly
         self.file_panel = file_panel
         self.train_panel = train_panel
 
+        # Init a QVBoxLayout as main layout of the panel
         self.layout = QVBoxLayout(self)
 
         # Create a group box for the prediction panel
@@ -53,35 +58,26 @@ class PredictionPanel(QWidget):
         self.predict_panel_layout.addWidget(self.choose_coculture_file_button)
 
         # Add a text label for selecting the x, y, z axes
-        self.axis_selection_label = QLabel("Choose the Channels that will be used as x, y, z axis for the 3D plot:", self)
+        self.axis_selection_label = QLabel(GuiMessages.AXIS_SELECTION, self)
         self.predict_panel_layout.addWidget(self.axis_selection_label)
 
-        # X Axis selection
-        self.x_axis_layout = QHBoxLayout()
-        self.x_axis_label = QLabel("X Axis:", self)
-        self.x_axis_combo = QComboBox(self)
-        self.x_axis_layout.addWidget(self.x_axis_label)
-        self.x_axis_layout.addWidget(self.x_axis_combo)
-        self.predict_panel_layout.addLayout(self.x_axis_layout)
+        # X,Y,Z axis
+        self.x_axis_selector = AxisSelector("X Axis:", self)
+        self.y_axis_selector = AxisSelector("Y Axis:", self)
+        self.z_axis_selector = AxisSelector("Z Axis:", self)
 
-        # Y Axis selection
-        self.y_axis_layout = QHBoxLayout()
-        self.y_axis_label = QLabel("Y Axis:", self)
-        self.y_axis_combo = QComboBox(self)
-        self.y_axis_layout.addWidget(self.y_axis_label)
-        self.y_axis_layout.addWidget(self.y_axis_combo)
-        self.predict_panel_layout.addLayout(self.y_axis_layout)
+        self.predict_panel_layout.addWidget(self.x_axis_selector)
+        self.predict_panel_layout.addWidget(self.y_axis_selector)
+        self.predict_panel_layout.addWidget(self.z_axis_selector)
 
-        # Z Axis selection
-        self.z_axis_layout = QHBoxLayout()
-        self.z_axis_label = QLabel("Z Axis:", self)
-        self.z_axis_combo = QComboBox(self)
-        self.z_axis_layout.addWidget(self.z_axis_label)
-        self.z_axis_layout.addWidget(self.z_axis_combo)
-        self.predict_panel_layout.addLayout(self.z_axis_layout)
+        self.axis_selectors = [
+            self.x_axis_selector,
+            self.y_axis_selector,
+            self.z_axis_selector
+        ]
 
         # Add a checkbox to apply uncertainty filtering
-        self.uncertainty_filtering_checkbox = QCheckBox("Apply filtering on the predictions based on their uncertainty scores.", self)
+        self.uncertainty_filtering_checkbox = QCheckBox(GuiMessages.UNCERTAINTY_CHECKBOX, self)
         self.uncertainty_filtering_checkbox.stateChanged.connect(self.toggle_uncertainty_filterint_options)
         self.predict_panel_layout.addWidget(self.uncertainty_filtering_checkbox)
 
@@ -91,83 +87,19 @@ class PredictionPanel(QWidget):
         self.uncertainty_threshold_layout.addWidget(self.uncertainty_threshold_label)
 
         self.uncertainty_threshold = QDoubleSpinBox(self)
-        self.uncertainty_threshold.setToolTip(\
-            "Set threshold for filtering out uncertain predictions. "
-            "If you just trained a model, CellScanner computed already the threshold allowing the highest accuracy and set it as default. "
-            "If you are loading a model, you can set the threshold manually, and if you are using a previously trained model, "
-            "you can use its corresponding model_statistics file to remember the threshold suggested. "
-            "To use the widely used threshold of 0.5 of the maximum entropy, set this value to -1.0 and CellScanner will apply this."
-        )
-        self.uncertainty_threshold.setRange(-1.0, 10.0)  # Set minimum and maximum values
-        self.uncertainty_threshold.setSingleStep(0.01)  # Set step size
+        self.uncertainty_threshold.setToolTip(GuiMessages.UNCERTAINTY_TOOLTIP)
+        self.uncertainty_threshold.setRange(-1.0, 10.0)
+        self.uncertainty_threshold.setSingleStep(0.01)
         self.update_uncertainty_threshold()
         self.uncertainty_threshold_layout.addWidget(self.uncertainty_threshold)
 
         self.predict_panel_layout.addLayout(self.uncertainty_threshold_layout)
 
         # Add a checkbox to apply gating
-        self.gating_layout =  QVBoxLayout()
-        self.gating_checkbox = QCheckBox("Apply line gating", self)
-        self.gating_checkbox.setToolTip(\
-            "When staining for both inactive and total cells, CellScanner will also return the living cells, by combining findings from these 2 stains."
-        )
-        self.gating_layout.addChildWidget(self.gating_checkbox)
-        self.gating_checkbox.stateChanged.connect(self.toggle_gating_options)
-        self.predict_panel_layout.addWidget(self.gating_checkbox)
+        self.gating_checkbox()  # NOTE: from the GatingCheckBox mixin class, passed in the class definition
 
-        # Add message for strain thresholds
-        self.thresholds_layout = QHBoxLayout()
-        self.threshold_message = QLabel(
-            "Important: Some visualization software may transform raw data. \n"
-            "Ensure you set the threshold based on the raw data, not post-transformation.\n",
-            self
-        )
-        self.thresholds_layout.addWidget(self.threshold_message)
-        self.predict_panel_layout.addLayout(self.thresholds_layout)
-
-
-        # Stain 1 selection (for live/dead)
-        tooltip_for_stain_1 = (
-            "Select the channel that will be used for gating live/dead cells. "
-            "All events where the threshold is met will be classified as dead."
-        )
-        self.stain1_layout = QHBoxLayout()
-        self.stain1_label = QLabel("Staining inactive cells (e.g. PI):", self)
-        self.stain1_combo = QComboBox(self)
-        self.stain1_combo.setToolTip(tooltip_for_stain_1)
-        self.stain1_combo.addItem("Not applicable")
-        self.stain1_relation = QComboBox(self)
-        self.stain1_relation.addItems(['>', '<'])
-        self.stain1_threshold = QLineEdit(self)
-        self.stain1_threshold.setPlaceholderText(
-            "Enter threshold. All events where the threshold is met will be classified as dead."
-        )
-        self.stain1_layout.addWidget(self.stain1_label)
-        self.stain1_layout.addWidget(self.stain1_combo)
-        self.stain1_layout.addWidget(self.stain1_relation)
-        self.stain1_layout.addWidget(self.stain1_threshold)
-        self.predict_panel_layout.addLayout(self.stain1_layout)
-
-        # Stain 2 selection (for debris, optional)
-        tooltip_for_stain_2 = (
-            "Select the channel that will be used for gating all cells. "
-            "All events where the threshold is met will be classified as cells. "
-            "The rest of the events will be classified as debris."
-        )
-        self.stain2_layout = QHBoxLayout()
-        self.stain2_label = QLabel("Staining all cells (e.g. SYBR/DAPI):", self)
-        self.stain2_combo = QComboBox(self)
-        self.stain2_combo.setToolTip(tooltip_for_stain_2)
-        self.stain2_combo.addItem("Not applicable")
-        self.stain2_relation = QComboBox(self)
-        self.stain2_relation.addItems(['>', '<'])
-        self.stain2_threshold = QLineEdit(self)
-        self.stain2_threshold.setPlaceholderText("Enter threshold. All events where the threshold is met will be classified as cells.")
-        self.stain2_layout.addWidget(self.stain2_label)
-        self.stain2_layout.addWidget(self.stain2_combo)
-        self.stain2_layout.addWidget(self.stain2_relation)
-        self.stain2_layout.addWidget(self.stain2_threshold)
-        self.predict_panel_layout.addLayout(self.stain2_layout)
+        # Fire basic stains
+        self.basic_stains()  # NOTE: from the LiveDeadDebrisSelectors mixin class, passed in the class definition
 
         # Add user's labeled stain
         self.new_stain_button =  QPushButton(text="Add extra stain", parent=self)
@@ -177,18 +109,17 @@ class PredictionPanel(QWidget):
         self.predict_panel_layout.addWidget(self.new_stain_button)
 
         # Hide gating and uncertainty filtering options initially
-        self.toggle_gating_options()
+        self.toggle_gating_options()  # NOTE: from the GatingMixin mixin class, passed in the base classes of the PredictionPanel
         self.toggle_uncertainty_filterint_options()
 
         # Add gating layout to the predict one
-        self.predict_panel_layout.addLayout(self.gating_layout)
+        self.predict_panel_layout.addLayout(self.gating_layout)  # NOTE: (clarification) the gating_layout is there, thanks to the gating_checkbox mixin class
 
         # Run Prediction Button
         self.run_prediction_button = QPushButton("Predict", self)
         self.run_prediction_button.setStyleSheet(button_style(font_size=12, padding=5))
         self.run_prediction_button.clicked.connect(self.fire_predict)
         self.predict_panel_layout.addWidget(self.run_prediction_button)
-
 
     def fire_predict(self):
         try:
@@ -251,14 +182,16 @@ class PredictionPanel(QWidget):
                     )
                 self.numeric_colums_set = set(numeric_columns)
                 # Populate the combo boxes with the numeric column names
-                self.stain1_combo.addItems(self.numeric_colums_set)
-                self.stain2_combo.addItems(self.numeric_colums_set)
-                self.x_axis_combo.addItems(self.numeric_colums_set)
-                self.y_axis_combo.addItems(self.numeric_colums_set)
-                self.z_axis_combo.addItems(self.numeric_colums_set)
+
+                # Update all axis selectors
+                for selector in self.axis_selectors:
+                    selector.set_items(self.numeric_colums_set)
+
+                # Update all stain selectors
+                for selector in self.stain_selectors:
+                    selector.set_items(self.numeric_colums_set)
 
                 self.channels_on_stain_buttons()
-
 
                 # Keep dictionary with sample names (key) and their corresponding data_df (value)
                 self.sample_to_df = sample_to_df
@@ -284,21 +217,6 @@ class PredictionPanel(QWidget):
         QMessageBox.information(self, "Prediction Complete", f"Predictions have been saved in {self.predict_dir}.")
         self.thread = None
 
-    def toggle_gating_options(self):
-        # Show or hide gating options based on checkbox state
-        is_checked = self.gating_checkbox.isChecked()
-        self.stain1_label.setVisible(is_checked)
-        self.stain1_combo.setVisible(is_checked)
-        self.stain1_relation.setVisible(is_checked)
-        self.stain1_threshold.setVisible(is_checked)
-        self.stain2_label.setVisible(is_checked)
-        self.stain2_combo.setVisible(is_checked)
-        self.stain2_relation.setVisible(is_checked)
-        self.stain2_threshold.setVisible(is_checked)
-        self.new_stain_button.setVisible(is_checked)
-        self.threshold_message.setVisible(is_checked)
-
-
     def toggle_uncertainty_filterint_options(self):
         is_checked = self.uncertainty_filtering_checkbox.isChecked()
         self.filter_out_uncertain = True
@@ -306,27 +224,29 @@ class PredictionPanel(QWidget):
         self.uncertainty_threshold.setVisible(is_checked)
         self.update_uncertainty_threshold()
 
-
     def update_uncertainty_threshold(self):
         if self.train_panel.cs_uncertainty_threshold is not None:
             self.uncertainty_threshold.setValue(self.train_panel.cs_uncertainty_threshold)
         else:
             self.uncertainty_threshold.setValue(-1.0)  # Set default value
 
-
     def build_stain_inputs(self):
-        # Stain 1 selection (for live/dead)
+        """
+        Function to support user-labeled stains
+        A stain needs to have:
+        - a channel
+        - a sign
+        - a threshold
+        - a label
+        CellScanner will set the label as True when the threshold holds.
+        """
         stain_layout = QHBoxLayout()
         stain_description = QLabel("Staining cells:", self)
         stain_combo = QComboBox(self)
-        stain_combo.setToolTip(
-            "Select the channel that will be used for gating cells. "
-            "All events where the threshold is met will be classified according to the label you provide."
-        )
+        stain_combo.setToolTip(GuiMessages.USER_STAIN_TOOLTIP)
         stain_relation = QComboBox(self)
         stain_relation.addItems(['>', '<'])
         stain_threshold = QDoubleSpinBox(self)  # QLineEdit(self)
-        # stain_threshold.setPlaceholderText("Enter threshold")
 
         stain_label = QLineEdit(self)
         stain_label.setPlaceholderText("Enter label")
@@ -347,7 +267,6 @@ class PredictionPanel(QWidget):
             print("No coculture file yet.")
             pass
         stain_combo.addItem("Not applicable")
-
 
     def channels_on_stain_buttons(self):
         for i in range(self.gating_layout.count()):
@@ -376,9 +295,12 @@ class WorkerPredict(QObject):
         super().__init__()
         self.PredictPanel = PredictPanel  # Store the QWidget instance
 
-
     def run_predict(self):
+        """
+        Main function to call the predict() function of CellScanner for each and every co-culture file provided
+        """
         try:
+            # Get dictioanry with user-labeled stains
             extra_stains = iterate_stains(self.PredictPanel)
             self.PredictPanel.extra_stains = extra_stains if len(extra_stains) > 0 else None
             multiple_cocultures = True if self.PredictPanel.samples_number > 1 else False
@@ -414,34 +336,4 @@ class WorkerPredict(QObject):
 
         except Exception as e:
             self.error_signal.emit(f"Error during prediction: {str(e)}")
-
-
-def iterate_stains(self):
-    """
-    Return a dictionary with the extra stains settings as provided by the user in CS GUI
-    """
-    extra_stains = {}
-    for i in range(self.gating_layout.count()):
-        item = self.gating_layout.itemAt(i)
-        widget = item.widget()
-        if widget:
-            # Access individual components within the stain container
-            stain_layout = widget.layout()
-            if stain_layout:
-                # Iterate through components of this layout
-                for j in range(stain_layout.count()):
-                    # Get component's features
-                    component = stain_layout.itemAt(j).widget()
-                    # Check the different type members of the stain layout
-                    if isinstance(component, QComboBox):
-                        if component.currentText() in [">", "<"]:
-                            sign = component.currentText()
-                        else:
-                            channel = component.currentText()
-                    elif isinstance(component, QLineEdit):
-                        label = component.text()
-                    elif isinstance(component, QDoubleSpinBox):
-                        threshold = component.value()
-                extra_stains[channel] = (sign, threshold, label)
-    return extra_stains
 

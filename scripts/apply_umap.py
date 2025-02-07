@@ -46,6 +46,9 @@ def process_files(TrainPanel=None, **kwargs):
     gui = False
     if type(TrainPanel).__name__ == "TrainModelPanel":
 
+
+        print(TrainPanel.__dict__())
+
         # Read parameters from the GUI
         params = {
             "n_events": int(TrainPanel.event_combo.currentText()),

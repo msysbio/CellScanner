@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLin
 import fcsparser
 
 from .helpers import get_app_dir, time_based_dir, button_style, load_model_from_files
+from .GUIhelpers import LabeledSpinBox
 
 """
 ImportFiles.py
@@ -50,7 +51,6 @@ class ImportFilePanel(QWidget):
         self.file_types = "Flow Cytometry Files (*.fcs);;All Files (*)"
         self.select_blanks_message = ["Select Blank Files", "", self.file_types]
 
-
         # Blank Files Selection
         blank_layout = QHBoxLayout()
         self.blank_button = QPushButton("Select Blank Files (.fcs)", self)
@@ -73,26 +73,21 @@ class ImportFilePanel(QWidget):
         self.previously_trained_model_button = QPushButton("Add Model", self)
         self.previously_trained_model_button.setStyleSheet(button_style(bck_col="#f7c67d", bck_col_hov="#deb270"))
         self.previously_trained_model_button.setToolTip(
-        "Optional. If you have a model from a previous CellScanner run,"
-        "you may provide it so you do not have to go trought the training step again."
-        "If you use this option, you shall move on with the Prediction parameters, without adding any blank or species files."
+            "Optional. If you have a model from a previous CellScanner run,"
+            "you may provide it so you do not have to go trought the training step again."
+            "If you use this option, you shall move on with the Prediction parameters, without adding any blank or species files."
         )
         self.previously_trained_model_button.clicked.connect(self.add_prev_trained_model)
         self.layout.addWidget(self.previously_trained_model_button)
 
         # Scaling constant of previously trained model
-        self.scaling_constant_layout = QHBoxLayout()
-        self.scaling_constant_label = QLabel("Scaling Constant:", self)
-        self.scaling_constant_layout.addWidget(self.scaling_constant_label)
+        self.scaling_constant = LabeledSpinBox(
+            "Scaling Constant:",
+            min_value=0, max_value=1000, step=1, default_value=150
+        )
+        self.layout.addWidget(self.scaling_constant)
 
-        self.scaling_constant = QSpinBox(self)
-        self.scaling_constant.setRange(0, 1000)  # Set minimum and maximum values
-        self.scaling_constant.setSingleStep(1)  # Set step size
-        self.scaling_constant.setValue(150)  # Set default value
-        self.scaling_constant_layout.addWidget(self.scaling_constant)
-
-        self.layout.addLayout(self.scaling_constant_layout)
-
+        # Model load
         self.model_loaded = False
         self.toggle_const_scaling()
 
@@ -242,7 +237,7 @@ class ImportFilePanel(QWidget):
     def toggle_const_scaling(self):
         # Show or hide scaling constant layout based on model_loaded flag
         self.model_loaded = True if self.model is not None else False
-        self.scaling_constant_label.setVisible(self.model_loaded)
+        self.scaling_constant.label.setVisible(self.model_loaded)
         self.scaling_constant.setVisible(self.model_loaded)
 
 

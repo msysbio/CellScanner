@@ -4,6 +4,7 @@ from datetime import datetime
 from dataclasses import dataclass
 from typing import Optional
 
+
 def get_app_dir():
     """Get absolute path relative to the executable location."""
     if hasattr(sys, '_MEIPASS'):
@@ -97,7 +98,7 @@ def get_stains_from_panel(PredictionPanel):
     # Stain 1
     stain_1 = PredictionPanel.stain1_combo.currentText()  # It should be the column name
     if stain_1 != "Not applicable":
-        stain1_channel = stain1
+        stain1_channel = stain_1
         stain1_relation = PredictionPanel.stain1_relation.currentText()
         stain1_threshold = float(PredictionPanel.stain1_threshold.text())
         stain_1 = Stain(stain1_channel, stain1_relation, stain1_threshold)
@@ -121,4 +122,3 @@ class Stain:
     sign: str
     value: float
     label: Optional[str] = None
-
