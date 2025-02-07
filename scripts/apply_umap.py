@@ -3,36 +3,67 @@ import umap
 import fcsparser
 import pandas as pd
 import numpy as np
-from dataclasses import dataclass
 from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import NearestNeighbors
-import plotly.express as px
 from .nn import prepare_for_training
-from .helpers import Stain, get_stains_from_panel
+from .helpers import Stain, get_stains_from_panel, apply_gating
 from .illustrations import umap_plot
-from .run_prediction import apply_gating
 
 
-def process_file(file, species_name, n_events, stain_1, stain_2
-                #  , scaling_constant=150
-    ):
+def process_file(file, species_name, n_events, stain_1, stain_2, model_dir):          #  , scaling_constant=150
+    """
+    Processes import .fcs files by first gating (if asked) and then sampling their entries
+    to only keep a subset of them for the training step.
+
+    :param file (str): Path to the .fcs file
+    :param species_name (str): Name of the species corresponding to the .fcs file
+    :param n_events (int): Number of entries of the .fcs file to keep for model training
+    :param stain_1 (Strain): User parameters for the (live/dead) staining
+    :param stain_2 (Stain): User parammeters for the (cells/debris) staining
+    :param model_dir (str): Path for model-related output files to be saved
+
+    :return sampled_df: The gated (if asked) and sampled entris of the .fcs file to be used for the model training
+    """
     _, df = fcsparser.parse(file, reformat_meta=True)
     if 'Time' in df.columns:
         df = df.drop(columns=['Time'])  # Remove Time column
 
-    if stain_1.channel is not None or stain_2.channel is not None:
-        # Apply gating
-        gated_df, _ = apply_gating(df,
-            stain_1, stain_2,
-            # scaling_constant
-        )
-        if stain_1.channel is not None:
-            df = df[gated_df["dead"] == False]
-        if stain_2.channel is not None:
-            df = df[gated_df["cell"] == True]
-    else:
+    print("Processing file: ", species_name)
+
+    if stain_1 is None and stain_2 is None:
         print("No gating for the training step.")
 
+    else:
+        # Apply gating
+        with open(os.path.join(model_dir, "gating_input_data.txt"), "w") as f:
+            # Writing species name and original number of entries
+            f.write(f"species name: {species_name}\n")
+            f.write(f"original number of entries: {df.shape}\n")
+
+            # Apply gating process
+            try:
+                gated_df, _ = apply_gating(df, stain_1, stain_2)
+            except ValueError as e:
+                raise ValueError(f"Error processing species {species_name}: {e}") from e
+
+
+            # Print and write columns to the file
+            print("df.columns\n", df.columns)
+            print("gated_df.columns\n", gated_df.columns)
+            f.write(f"df.columns: {df.columns.tolist()}\n")
+            f.write(f"gated_df.columns: {gated_df.columns.tolist()}\n")
+
+            # Apply gating for stain 1 if channel is not None
+            if stain_1.channel is not None:
+                df = df[gated_df["dead"] == False]
+                f.write(f"number of entries after gating for stain1: {df.shape}\n")
+
+            # Apply gating for stain 2 if channel is not None
+            if stain_2.channel is not None:
+                df = df[gated_df["cell"] == True]
+                f.write(f"number of entries after gating for stain2: {df.shape}\n")
+
+    # Keep a subset of the entries for the training part
     sampled_df = df.sample(n=min(n_events, len(df)))
     sampled_df['Species'] = species_name
 
@@ -49,18 +80,21 @@ def process_files(TrainPanel=None, **kwargs):
         # Read parameters from the GUI
         params = {
             "n_events": int(TrainPanel.event_combo.currentText()),
-            "umap_n_neighbors": int(TrainPanel.umap_nneighbors_combo.currentText()),
-            "umap_min_dist": float(TrainPanel.umap_mindist_combo.currentText()),
-            "nonblank_threshold": int(TrainPanel.nn_nonblank_combo.currentText()),
-            "blank_threshold": int(TrainPanel.nn_blank_combo.currentText()),
+            "umap_n_neighbors": int(TrainPanel.umap_nneighbors_combo.combo.currentText()),
+            "umap_min_dist": float(TrainPanel.umap_mindist_combo.combo.currentText()),
+            "nonblank_threshold": int(TrainPanel.nn_nonblank_combo.combo.currentText()),
+            "blank_threshold": int(TrainPanel.nn_blank_combo.combo.currentText()),
             "species_files_names_dict": TrainPanel.file_panel.species_files,
             "blank_files": TrainPanel.file_panel.blank_files,
             "working_directory": TrainPanel.file_panel.working_directory,
 
         }
-        gating = TrainPanel.predict_panel.gating_checkbox.isChecked()
+
+        gating = TrainPanel.gating_checkbox.isChecked()
+
         if gating:
-            stain_1, stain_2 = get_stains_from_panel(TrainPanel.predict_panel)
+            stain_1, stain_2 = get_stains_from_panel(TrainPanel)
+            print("Stains loaded:", stain_1)
         else:
             stain_1, stain_2 = None, None
         gui = True
@@ -84,6 +118,8 @@ def process_files(TrainPanel=None, **kwargs):
     species_files_names_dict = params["species_files_names_dict"]
     blank_files = params["blank_files"]
     working_directory = params["working_directory"]
+    model_dir = os.path.join(working_directory, "model")
+    os.makedirs(model_dir, exist_ok=True)
 
     # Process files for all species dynamically
     all_species_dataframes = []
@@ -95,11 +131,12 @@ def process_files(TrainPanel=None, **kwargs):
                     process_file(
                         file=sp_file, species_name=species_name,
                         n_events=n_events,
-                        stain_1=stain_1, stain_2=stain_2
+                        stain_1=stain_1, stain_2=stain_2,
+                        model_dir=model_dir
                     )
                 )
             except Exception as e:
-                print(f"Error processing file {sp_file}: {e}")
+                raise Exception(f"Error while processing species file {species_name}: {e}") from e  # Corrected
         all_species_dataframes.append(species_dataframes)
 
     # Process blanks
@@ -110,13 +147,16 @@ def process_files(TrainPanel=None, **kwargs):
             blank_dataframes.append(
                 process_file(
                     file=blank_file, species_name='Blank', n_events=n_events,
-                    stain_1=blank_stain, stain_2=blank_stain)
+                    stain_1=blank_stain, stain_2=blank_stain,
+                    model_dir=model_dir
+                )
             )
         except Exception as e:
-            print(f"Error processing blank file {blank_file}: {e}")
+            raise(f"Error processing blank file {blank_file}: {e}") from e
 
     # Combine data
     combined_df = pd.concat([df for species_dataframes in all_species_dataframes for df in species_dataframes] + blank_dataframes)
+
 
     columns_to_plot = combined_df.columns.difference(['Species']).tolist()
     data_subset = combined_df[columns_to_plot].values
@@ -137,11 +177,12 @@ def process_files(TrainPanel=None, **kwargs):
     label_map['Blank'] = len(label_map)
     mapped_labels = combined_df['Species'].map(label_map).values
 
-    # Define the path to save the plot
-    model_dir = os.path.join(working_directory, "model")  # get_abs_path('model/statistics')
-    os.makedirs(model_dir, exist_ok=True)
     # Plot UMAP before filtering
     umap_plot(combined_df, embedding, model_dir, "Before", None)
+
+    # -----------------------
+    # Call nn basic class
+    # -----------------------
 
     # Nearest Neighbors filtering
     print("Instantiate the Nearest Neighbors Model")

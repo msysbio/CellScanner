@@ -8,14 +8,17 @@ from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics import pairwise_distances
 from scipy.stats import entropy
 
-from .helpers import create_file_path, get_stains_from_panel
-from .illustrations import species_plot, uncertainty_plot, heterogeneity_pie_chart, heterogeneity_bar_plot, gating_plot, create_color_map
+from .helpers import create_file_path, get_stains_from_panel, apply_gating, save_gating_results
+from .illustrations import species_plot, uncertainty_plot, heterogeneity_pie_chart, heterogeneity_bar_plot, create_color_map
 
 # Main function to be called from the worker
 def predict(PredictionPanel=None, **kwargs):
 
     gui = False
     if type(PredictionPanel).__name__ == "PredictionPanel":
+
+
+        print(PredictionPanel.__dict__)
 
         # Attempt to retrieve components from file_panel first
         model, scaler, label_encoder, scaling_constant = get_model_components(PredictionPanel.file_panel)
@@ -27,9 +30,9 @@ def predict(PredictionPanel=None, **kwargs):
         data_df = PredictionPanel.data_df
         output_dir = PredictionPanel.predict_dir
 
-        x_axis_combo = PredictionPanel.x_axis_combo.currentText()
-        y_axis_combo = PredictionPanel.y_axis_combo.currentText()
-        z_axis_combo = PredictionPanel.z_axis_combo.currentText()
+        x_axis_combo = PredictionPanel.x_axis_selector.combo.currentText()
+        y_axis_combo = PredictionPanel.y_axis_selector.combo.currentText()
+        z_axis_combo = PredictionPanel.z_axis_selector.combo.currentText()
         gating = PredictionPanel.gating_checkbox.isChecked()
         sample = PredictionPanel.sample
 
@@ -185,94 +188,6 @@ def predict_species(data_df, model, scaler, label_encoder, scaling_constant):
     return predicted_classes, uncertainties, index_to_species
 
 
-def apply_gating(data_df,
-                 stain1=None,
-                 stain2=None,
-                #  scaling_constant=150,
-                 extra_stains=None
-    ):
-
-    all_labels = []
-
-    # Copy the DataFrame to not change the original data
-    gated_data_df = data_df.copy()
-
-    # Temporarily remove the 'predictions' column to avoid issues with numeric operations
-    predictions_column = gated_data_df.pop('predictions') if 'predictions' in gated_data_df.columns else None
-
-    # Reintegrate the 'predictions' column after the arcsinh transformation
-    if predictions_column is not None:
-        gated_data_df['predictions'] = predictions_column
-
-    if stain1.channel is not None:
-
-        # Initialize the 'state' column with 'not dead'
-        gated_data_df['dead'] = False
-        # Apply gating based on the first stain (live/dead)
-        if stain1.sign in ['>', 'greater_than']:
-            gated_data_df.loc[gated_data_df[stain1.channel] > stain1.value, 'dead'] = True
-        elif stain1.sign in ['<', 'less_than']:
-            gated_data_df.loc[gated_data_df[stain1.channel] < stain1.value, 'dead'] = True
-        # Sannity check
-        stain_sannity_check(gated_data_df, "dead", stain1.channel, stain1.sign, stain1.value)
-        all_labels.append("dead")
-
-    if stain2.channel is not None:
-
-        # Initialize the 'state' column with 'not dead'
-        gated_data_df['cell'] = False
-        # Apply gating based on the first stain (live/dead)
-        if stain2.sign in ['>', 'greater_than']:
-            gated_data_df.loc[gated_data_df[stain2.channel] > stain2.value, 'cell'] = True
-        elif stain2.sign in ['<', 'less_than']:
-            gated_data_df.loc[gated_data_df[stain2.channel] < stain2.value, 'cell'] = True
-        # Sannity check
-        stain_sannity_check(gated_data_df, "cell", stain2.channel, stain2.sign, stain2.value)
-        all_labels.append("cell")
-
-    # Apply gating based on the second stain (debris)
-    if stain2.channel and stain2.value and stain1.channel:
-
-        gated_data_df["state"] = "debris"
-
-        gated_data_df["state"].loc[
-            (gated_data_df["dead"] == False) & (gated_data_df["cell"] == True)
-        ] = "live"
-
-        gated_data_df["state"].loc[
-            (gated_data_df["dead"] == True) & (gated_data_df["cell"] == True)
-        ] = "inactive"
-
-        all_labels.append("state")
-
-    # Apply gating on extra stains
-    if extra_stains is not None:
-
-        for channel, details in extra_stains.items():
-            sign, threshold, label = details
-            # Create the comparison operator dynamically
-            condition = gated_data_df[channel] > threshold if sign == ">" else gated_data_df[channel] < threshold
-            gated_data_df[label] = condition
-            stain_sannity_check(gated_data_df, label, channel, sign, threshold)
-            all_labels.append(label)
-
-    return gated_data_df, all_labels
-
-
-def stain_sannity_check(df, label, channel, sign, threshold):
-    """
-    Checks if gating applied for a stain returns both True and False cases.
-    If not, raises an error so the user refines their thresholds.
-    """
-    counts = df[label].value_counts()
-    if True not in counts.index or False not in counts.index:
-        stain_min, stain_max = np.min(df[channel]), np.max(df[channel])
-        raise ValueError(
-            f"Invalid gating. Please check the gating thresholds."
-            f"Stain {channel} ranges between {stain_min} and {stain_max}, while current gating thresholds are {sign} {threshold}."
-        )
-
-
 def save_prediction_results(data_df: pd.DataFrame,
                             species_list: List,
                             output_dir: str,
@@ -334,46 +249,6 @@ def save_prediction_results(data_df: pd.DataFrame,
         print("3D scatter plot (Uncertainty) saved to:", plot_path_uncertainty)
 
 
-def save_gating_results(gated_data_df, output_dir, sample, x_axis, y_axis, z_axis, all_labels):
-    # Create a directory for gating results
-    gated_dir = os.path.join(output_dir, 'gated')
-    os.makedirs(gated_dir, exist_ok=True)
-
-    # Initialize an empty DataFrame to hold all state counts
-    combined_counts_df = pd.DataFrame()
-
-    # Iterate over each species and calculate the state counts
-    species_names = gated_data_df['predictions'].unique()
-    if "state" in all_labels:
-        all_labels.remove("dead") ; all_labels.remove("cell")
-
-    for species in species_names:
-        species_df = pd.DataFrame()
-        for label in all_labels:
-            if label == "state":
-                s = gated_data_df[gated_data_df['predictions'] == species][label].value_counts()
-            else:
-                s = gated_data_df[gated_data_df['predictions'] == species][label].value_counts()
-                if s.index[0] == True:
-                    s.index = [label, "_".join(["not", label])] if len(s.index) == 2 else [label]
-                else:
-                    s.index = ["_".join(["not", label]), label] if len(s.index) == 2 else ["_".join(["not", label])] # Default for False case
-            s.name = species
-            species_df = pd.concat([species_df, s], axis=0)
-
-        combined_counts_df = pd.concat([combined_counts_df, species_df], axis=1)
-
-    # Save the combined state counts to a single CSV file
-    combined_counts_df.to_csv(
-        os.path.join(gated_dir, "_".join([sample,'gating.csv']))
-    )
-
-    # Plot status if both stains provided
-    gating_plot(gated_data_df, species_names, x_axis, y_axis, z_axis, gated_dir, sample, all_labels)
-
-    print("3D scatter plot for gated data saved to:", gated_dir)
-
-
 def run_heterogeneity(df, species_list, output_dir, sample):
 
     # Create a directory for heterogeneity results
@@ -393,11 +268,14 @@ def run_heterogeneity(df, species_list, output_dir, sample):
 
     # Create and save heterogeneity plots
     save_heterogeneity_plots(hetero1, hetero2, heterogeneity_dir, sample)
-    res_file = "_".join([sample, "heterogeneity_results.txt"])
+    res_file = "_".join([sample, "heterogeneity_results.csv"])
     hetero_res_file = os.path.join(heterogeneity_dir, res_file)
-    with open(hetero_res_file, "w") as f:
-        f.write("Species\tSimple Heterogeneity\tMedoid Heterogeneity\n")
-        f.write(f"Coculture overall\t{hetero1}\t{hetero2}\n")
+
+
+
+
+
+    hetero_results_list = []
 
     # Compute heterogeneity measures for each species
     for species in species_list:
@@ -406,10 +284,43 @@ def run_heterogeneity(df, species_list, output_dir, sample):
             hetero1 = hetero_simple(df.iloc[:, :-1])
             hetero2 = hetero_mini_batch(df.iloc[:, :-1], species)
             save_heterogeneity_plots(hetero1, hetero2, heterogeneity_dir, sample, species)
+
+            # Append the result as a dictionary to the list
+            hetero_results_list.append({
+                "Species": species,
+                "Simple Heterogeneity": hetero1,
+                "Medoid Heterogeneity": hetero2
+            })
         except ValueError as e:
             raise ValueError("Error calculating heterogeneity.") from e
-        with open(hetero_res_file, "a") as f:
-            f.write(f"{species}\t{hetero1}\t{hetero2}\n")
+
+    # Convert the list of results to a DataFrame
+    hetero_results_df = pd.DataFrame(hetero_results_list)
+
+    # Save the DataFrame to a CSV file
+    hetero_results_df.to_csv(hetero_res_file, sep="\t", index=False)
+
+
+
+
+
+
+
+    # with open(hetero_res_file, "w") as f:
+    #     f.write("Species\tSimple Heterogeneity\tMedoid Heterogeneity\n")
+    #     f.write(f"Coculture overall\t{hetero1}\t{hetero2}\n")
+
+    # # Compute heterogeneity measures for each species
+    # for species in species_list:
+    #     df = hetero_df[hetero_df['predictions'] == species]
+    #     try:
+    #         hetero1 = hetero_simple(df.iloc[:, :-1])
+    #         hetero2 = hetero_mini_batch(df.iloc[:, :-1], species)
+    #         save_heterogeneity_plots(hetero1, hetero2, heterogeneity_dir, sample, species)
+    #     except ValueError as e:
+    #         raise ValueError("Error calculating heterogeneity.") from e
+    #     with open(hetero_res_file, "a") as f:
+    #         f.write(f"{species}\t{hetero1}\t{hetero2}\n")
 
 
 def hetero_simple(data):
@@ -463,10 +374,13 @@ def merge_prediction_results(output_dir, prediction_type):
 
     if prediction_type not in ["prediction", "uncertainty"]:
         raise ValueError(f"Please provide a valide prediction_type: 'prediction|uncertainty'")
-
     dfs = []
 
-    pattern = "_".join([prediction_type, "counts"])
+    if prediction_type == "prediction":
+        pattern = "_".join([prediction_type, "counts"])
+    else:
+        pattern = "heterogeneity_results"
+        output_dir = os.path.join(output_dir, "heterogeneity_results")
 
     # Loop through all files in the directory
     for file_name in os.listdir(output_dir):
@@ -497,5 +411,5 @@ def get_model_components(panel):
     scaler = getattr(panel, "scaler", None)
     label_encoder = getattr(panel, "le", None)
     scaling_constant = getattr(panel, "scaling_constant", None)
-    scaling_constant_value = scaling_constant.value() if scaling_constant else None
+    scaling_constant_value = scaling_constant.spin_box.value() if scaling_constant else None
     return model, scaler, label_encoder, scaling_constant_value

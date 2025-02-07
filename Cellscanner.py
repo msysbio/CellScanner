@@ -1,24 +1,16 @@
 # CellScanner.py
 import os
 import sys
-import shutil
-import atexit
-import numpy as np
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QFont
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout,\
-    QPushButton, QWidget, QLabel
+    QPushButton, QWidget, QLabel, QScrollArea
 
-from scripts.helpers import get_abs_path, button_style, get_app_dir
+from scripts.helpers import button_style, get_app_dir
 from scripts.ImportFiles import  ImportFilePanel
 from scripts.TrainingModel import TrainModelPanel
 from scripts.Prediction import PredictionPanel
-
-
-# from ImportFiles import get_abs_path, time_based_dir, ImportFilePanel, button_style, get_app_dir
-# from TrainingModel import TrainModelPanel
-# from Prediction import PredictionPanel
 
 
 """
@@ -93,10 +85,11 @@ Dependencies:
 - shutil
 - atexit
 
-Author: Ermis Ioannis Michail Delopoulos
-Date: 22/08/2024
+Authors:
+    - Ermis Ioannis Michail Delopoulos
+    - Haris Zafeiropoulos
 
-License: N/A
+Date: 2024-2025
 
 """
 
@@ -114,7 +107,7 @@ class NeuralNetworkGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("CellScanner")
-        self.setGeometry(100, 100, 700, 900)
+        self.setGeometry(100, 100, 850, 1800)
 
         # Initialize model-related attributes
         self.model = None
@@ -161,7 +154,11 @@ class NeuralNetworkGUI(QMainWindow):
         # Initial Import Files Button with styling
         self.import_button = QPushButton("Import Data", self)
         self.import_button.setStyleSheet(
-            button_style(font_size=16, padding=10, color="white", bck_col="#3b5998", bck_col_hov="#355089", bck_col_clicked="#2e477a", radius=8)
+            button_style(
+                font_size=16, padding=10, color="white",
+                bck_col="#3b5998", bck_col_hov="#355089", bck_col_clicked="#2e477a",
+                radius=8
+            )
         )
         self.import_button.clicked.connect(self.toggle_file_panel)
         self.layout.addWidget(self.import_button)
@@ -174,7 +171,11 @@ class NeuralNetworkGUI(QMainWindow):
         self.train_panel = TrainModelPanel(self.file_panel, self)  # Instantiate TrainModelPanel with the file pane
         self.train_button = QPushButton("Train Model", self)
         self.train_button.setStyleSheet(
-            button_style(font_size=16, padding=10, color="white", bck_col="#3b5998", bck_col_hov="#355089", bck_col_clicked="#2e477a", radius=8)
+            button_style(
+                font_size=16, padding=10, color="white",
+                bck_col="#3b5998", bck_col_hov="#355089", bck_col_clicked="#2e477a",
+                radius=8
+            )
         )
         self.train_button.clicked.connect(self.toggle_train_panel)
         # Add the train model panel to the layout but hide it initially
@@ -186,13 +187,24 @@ class NeuralNetworkGUI(QMainWindow):
         self.predict_panel = PredictionPanel(self.file_panel, self.train_panel, self)
         self.predict_button = QPushButton("Run Prediction", self)
         self.predict_button.setStyleSheet(
-            button_style(font_size=16, padding=10, color="white", bck_col="#3b5998", bck_col_hov="#355089", bck_col_clicked="#2e477a", radius=8)
+            button_style(
+                font_size=16, padding=10, color="white",
+                bck_col="#3b5998", bck_col_hov="#355089", bck_col_clicked="#2e477a",
+                radius=8
+            )
         )
         self.predict_button.clicked.connect(self.toggle_predict_panel)
         self.layout.addWidget(self.predict_button)
         self.layout.addWidget(self.predict_panel)
         self.predict_panel.hide()
 
+        # Create a QScrollArea and set it up
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)  # This makes the scroll area resize the content widget accordingly
+        scroll_area.setWidget(central_widget)
+
+        # Set the scroll area as the central widget of the main window
+        self.setCentralWidget(scroll_area)
 
     def toggle_file_panel(self):
         # Toggle the visibility of the file import panel
@@ -207,7 +219,6 @@ class NeuralNetworkGUI(QMainWindow):
             self.train_panel.hide()
         else:
             self.train_panel.show()
-
 
     def toggle_predict_panel(self):
         # Toggle the visibility of the predict panel

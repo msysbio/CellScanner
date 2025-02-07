@@ -22,10 +22,10 @@ def train_neural_network(TrainPanel=None, **kwargs):
     gui = False
     # if isinstance(TrainPanel, TrainModelPanel):
     if type(TrainPanel).__name__ == "TrainModelPanel":
-        fold_count = int(TrainPanel.kfold_combo.currentText())
-        epochs = int(TrainPanel.epochs_combo.currentText())
-        batch_size = int(TrainPanel.batch_combo.currentText())
-        patience = int(TrainPanel.patience_combo.currentText())
+        fold_count = int(TrainPanel.kfold_combo.combo.currentText())
+        epochs = int(TrainPanel.epochs_combo.combo.currentText())
+        batch_size = int(TrainPanel.batch_combo.combo.currentText())
+        patience = int(TrainPanel.patience_combo.combo.currentText())
         X, y = TrainPanel.X, TrainPanel.y
         species_names = TrainPanel.le.classes_
         working_directory = TrainPanel.file_panel.working_directory
@@ -149,7 +149,7 @@ def prepare_for_training(TrainPanel=None, **kwargs):
         cleaned_data = TrainPanel.cleaned_data
         scaler = TrainPanel.scaler
         le = TrainPanel.le
-        scaling_constant = TrainPanel.scaling_constant.value()
+        scaling_constant = TrainPanel.scaling_constant.spin_box.value()
         working_directory = TrainPanel.file_panel.working_directory
         gui = True
     else:
@@ -265,6 +265,13 @@ def save_train_stats(model, X_val_bf, y_val_bf, species_names, model_dir, best_a
     conf_matrix_df, class_report_df, threshold = predict_validation(model, X_val_bf, y_val_bf, species_names)
 
     # Save stats
+    print("class_report")
+    print(class_report_df)
+    print("---")
+    print(species_names)
+    if not all(name in class_report_df.index for name in species_names):
+        raise ValueError
+
     stats_path = (os.path.join(model_dir, 'model_statistics_kfold.csv')
                   if fold_count is not None
                   else os.path.join(model_dir, 'model_statistics.csv')
