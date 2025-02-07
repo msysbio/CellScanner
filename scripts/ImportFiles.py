@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLin
 import fcsparser
 
 from .helpers import get_app_dir, time_based_dir, button_style, load_model_from_files
-from .GUIhelpers import LabeledSpinBox
+from .GUIhelpers import LabeledSpinBox, GuiMessages, load_fcs_file
 
 """
 ImportFiles.py
@@ -55,10 +55,7 @@ class ImportFilePanel(QWidget):
         blank_layout = QHBoxLayout()
         self.blank_button = QPushButton("Select Blank Files (.fcs)", self)
         self.blank_button.setStyleSheet(button_style())
-        self.blank_button.setToolTip(
-        "If you wish to use several files, please add them all at once."
-        "Every time you click on the Select Files button, previsouly selected files are removed."
-        )
+        self.blank_button.setToolTip(GuiMessages.BLANKS_MULTIFILES)
         self.blank_button.clicked.connect(self.select_blank_files)
         blank_layout.addWidget(self.blank_button)
         self.layout.addLayout(blank_layout)
@@ -72,11 +69,7 @@ class ImportFilePanel(QWidget):
         # Previously trained model button
         self.previously_trained_model_button = QPushButton("Add Model", self)
         self.previously_trained_model_button.setStyleSheet(button_style(bck_col="#f7c67d", bck_col_hov="#deb270"))
-        self.previously_trained_model_button.setToolTip(
-            "Optional. If you have a model from a previous CellScanner run,"
-            "you may provide it so you do not have to go trought the training step again."
-            "If you use this option, you shall move on with the Prediction parameters, without adding any blank or species files."
-        )
+        self.previously_trained_model_button.setToolTip(GuiMessages.PREVIOUSLY_TRAINED_MODEL)
         self.previously_trained_model_button.clicked.connect(self.add_prev_trained_model)
         self.layout.addWidget(self.previously_trained_model_button)
 
@@ -180,14 +173,15 @@ class ImportFilePanel(QWidget):
                 shutil.copy(file, dest_file)
                 blank_files.append(dest_file)
 
-                # Parse the file, drop 'Time' column, and display metadata
-                _, data = fcsparser.parse(dest_file, reformat_meta=True)
-                if 'Time' in data.columns:
-                    data = data.drop(columns=['Time'])
+            # Keep the numeric columns to be used in the TrainModelPanel in case user applies line gating
+            _, _, numeric_columns = load_fcs_file(original_files)
+            self.numeric_colums_set = set(numeric_columns)
 
+            # Blank filenames
             self.blank_files = blank_files
             QMessageBox.information(self, "Files Selected", "Blank files selected successfully.")
             self.blank_button.setText(",".join([os.path.basename(x) for x in self.blank_files]))
+
         else:
             print(self.blank_files)
             self.blank_button.setText(" ".join([self.select_blanks_message[0], "(.fcs)"]))

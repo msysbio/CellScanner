@@ -27,7 +27,10 @@ import numpy as np
 
 from .helpers import button_style, time_based_dir
 from .run_prediction import predict, merge_prediction_results
-from .GUIhelpers import AxisSelector, LiveDeadDebrisSelectors, GatingMixin, GatingCheckBox, GuiMessages, iterate_stains
+from .GUIhelpers import (
+    AxisSelector, LiveDeadDebrisSelectors, GatingMixin, GatingCheckBox, GuiMessages,
+    iterate_stains, load_fcs_file
+)
 
 
 class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelectors):
@@ -145,8 +148,10 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
 
             # Thread-related tasks to perform and check if fine
             self.thread.start()
+
         except Exception as e:
             self.on_error(str(e))
+            self.stop_loading_cursor()
 
     def choose_coculture_file(self):
         select_coculture_message = ["Select Coculture File", "", "Flow Cytometry Files (*.fcs);;All Files (*)"]
@@ -154,22 +159,8 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
         if coculture_filepath:
 
             try:
-                sample_to_df = {}
-                sample_numeric_columns = {}
-
-                for coc in coculture_filepath:
-                    _, data_df = fcsparser.parse(coc, reformat_meta=True)
-
-                    # Drop the 'Time' column if it exists
-                    if 'Time' in data_df.columns:
-                        data_df = data_df.drop(columns=['Time'])
-                        sample_file_basename = os.path.basename(coc)  # coc.split('/')[-1]
-                        sample, _ = os.path.splitext(sample_file_basename)
-
-                        # Ensure only numeric columns are used in combo boxes
-                        numeric_columns = data_df.select_dtypes(include=[np.number]).columns
-                        sample_numeric_columns[sample_file_basename] = numeric_columns
-                        sample_to_df[sample] = data_df
+                # Load fcs files
+                sample_to_df, sample_numeric_columns, numeric_columns = load_fcs_file(coculture_filepath)
 
                 # Show files selected in the button
                 self.choose_coculture_file_button.setText(",".join(sample_to_df.keys()))  # Display only the filename, not the full path
@@ -177,11 +168,10 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
                 # Check if all files share the same numeric column names
                 all_same = all(value.equals(list(sample_numeric_columns.values())[0]) for value in sample_numeric_columns.values())
                 if not all_same:
-                    self.on_error("\
-                        Column names on your coculture files differ. Please make sure you only include files sharing the same column names."
-                    )
-                self.numeric_colums_set = set(numeric_columns)
+                    self.on_error(GuiMessages.COLUMN_NAMES_ERROR)
+
                 # Populate the combo boxes with the numeric column names
+                self.numeric_colums_set = set(numeric_columns)
 
                 # Update all axis selectors
                 for selector in self.axis_selectors:
@@ -202,9 +192,14 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
             self.choose_coculture_file_button.setText(select_coculture_message[0])
 
     def on_error(self, message):
-        self.stop_loading_cursor()
-        QMessageBox.critical(self, "Error", message)
-        self.thread = None
+        try:
+            self.stop_loading_cursor()
+            QMessageBox.critical(self, "Error", message)
+        except Exception as e:
+            print(f"Error displaying the message: {e}")
+        finally:
+            # Ensure that the thread is not running after error
+            self.thread = None
 
     def start_loading_cursor(self):
         QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -336,4 +331,5 @@ class WorkerPredict(QObject):
 
         except Exception as e:
             self.error_signal.emit(f"Error during prediction: {str(e)}")
+            self.PredictPanel.thread.quit()
 

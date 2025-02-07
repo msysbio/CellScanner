@@ -85,10 +85,11 @@ Dependencies:
 - shutil
 - atexit
 
-Author: Ermis Ioannis Michail Delopoulos
-Date: 22/08/2024
+Authors:
+    - Ermis Ioannis Michail Delopoulos
+    - Haris Zafeiropoulos
 
-License: N/A
+Date: 2024-2025
 
 """
 
@@ -106,7 +107,7 @@ class NeuralNetworkGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("CellScanner")
-        self.setGeometry(100, 100, 700, 900)
+        self.setGeometry(100, 100, 850, 1800)
 
         # Initialize model-related attributes
         self.model = None

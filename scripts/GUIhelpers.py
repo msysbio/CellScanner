@@ -1,3 +1,7 @@
+import os
+import fcsparser
+import numpy as np
+
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QComboBox, QLabel, QLineEdit, QDoubleSpinBox,
     QSpinBox, QVBoxLayout, QCheckBox
@@ -137,6 +141,17 @@ class GatingMixin:
     def toggle_gating_options(self):
         is_checked = self.gating_checkbox.isChecked()
 
+        if self.get_host_class_name() == "TrainModelPanel":
+
+            if is_checked and len(self.file_panel.blank_files) > 0:
+                # Update all stain selectors
+                for selector in self.stain_selectors:
+                    selector.set_items(self.file_panel.numeric_colums_set)
+
+        else:
+            print(self.get_host_class_name())
+
+
         for selector in self.stain_selectors:
             selector.label.setVisible(is_checked)
             selector.combo.setVisible(is_checked)
@@ -148,6 +163,9 @@ class GatingMixin:
         except:
             print("No need for extra stain at the training step")
             pass
+
+    def get_host_class_name(self):
+        return self.__class__.__name__
 
 class GatingCheckBox:
     """
@@ -175,7 +193,6 @@ class GatingCheckBox:
             self.predict_panel_layout.addLayout(self.thresholds_layout)
         except:
             self.train_gating_layout.addLayout(self.thresholds_layout)
-
 
 
 class LiveDeadDebrisSelectors:
@@ -214,7 +231,6 @@ class LiveDeadDebrisSelectors:
         ]
 
 
-
 # ToolTips
 class GuiMessages:
 
@@ -245,4 +261,47 @@ class GuiMessages:
         "Ensure you set the threshold based on the raw data, not post-transformation."
     )
 
+
+    COLUMN_NAMES_ERROR = (
+        "Column names on your coculture files differ. Please make sure you only include files sharing the same column names."
+    )
+
+    PREVIOUSLY_TRAINED_MODEL = (
+        "Optional. If you have a model from a previous CellScanner run,"
+        "you may provide it so you do not have to go trought the training step again."
+        "If you use this option, you shall move on with the Prediction parameters, without adding any blank or species files."
+    )
+
+    BLANKS_MULTIFILES = (
+        "If you wish to use several files, please add them all at once."
+        "Every time you click on the Select Files button, previsouly selected files are removed."
+    )
+
+
+def load_fcs_file(fcss):
+    """
+    :param fcss: List of fcs files provided by the user
+    :return sample_to_df:
+    :return sample_numeric_columns:
+    """
+
+
+    sample_to_df = {}
+    sample_numeric_columns = {}
+
+    for fcs in fcss:
+        _, data_df = fcsparser.parse(fcs, reformat_meta=True)
+
+        # Drop the 'Time' column if it exists
+        if 'Time' in data_df.columns:
+            data_df = data_df.drop(columns=['Time'])
+            sample_file_basename = os.path.basename(fcs)  # fcs.split('/')[-1]
+            sample, _ = os.path.splitext(sample_file_basename)
+
+            # Ensure only numeric columns are used in combo boxes
+            numeric_columns = data_df.select_dtypes(include=[np.number]).columns
+            sample_numeric_columns[sample_file_basename] = numeric_columns
+            sample_to_df[sample] = data_df
+
+    return sample_to_df, sample_numeric_columns, numeric_columns
 

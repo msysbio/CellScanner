@@ -137,7 +137,7 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
         self.epochs_combo = LabeledComboBox("Epochs:", ["10", "20", "30", "50", "100","500"], "50", self)
 
         # BATCH SIZE
-        self.batch_selector = LabeledComboBox("Batch Size:", ["16", "32", "64", "128"], "32", self)
+        self.batch_combo = LabeledComboBox("Batch Size:", ["16", "32", "64", "128"], "32", self)
 
         # PATIENCE
         self.patience_combo = LabeledComboBox("EarlyStopping Patience:", ["5", "10", "15", "20"], "10", self)
@@ -145,7 +145,7 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
         # Add the widgets to the group box layout
         model_settings_layout.addWidget(self.epochs_combo)
         model_settings_layout.addWidget(self.kfold_combo)
-        model_settings_layout.addWidget(self.batch_selector)
+        model_settings_layout.addWidget(self.batch_combo)
         model_settings_layout.addWidget(self.patience_combo)
 
         # Add the QGroupBox to your main layout
@@ -194,9 +194,11 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
         QApplication.restoreOverrideCursor()
 
     def start_training_process(self):
-        # Load predict panel attributes to enable gating
-        # self.predict_panel = self.parent().parent().predict_panel
-
+        """
+        Establihes a thread and a worker to execute the run_process_files().
+        The signals of the worker allows not to exit the app in case of error
+        and to return a success message when complete.
+        """
         try:
             #start the loading cursor
             self.start_loading_cursor()
@@ -206,8 +208,9 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
 
             # Create a new thread for processing- without it the app froze while running Neural
             self.thread = QThread()
-            self.worker = WorkerProcessFiles(parent_widget=self)
+            self.worker = WorkerProcessFiles(TrainModelPanel=self)
             self.worker.moveToThread(self.thread)
+            self.worker.error_signal.connect(self.on_error)
             self.thread.started.connect(self.worker.run_process_files)
 
             # Apply UMAP & train neural network
@@ -222,7 +225,7 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
 
         except Exception as e:
            self.on_error(str(e))
-           self.stop_loading_cursor()
+
 
     def on_finished(self):
         self.stop_loading_cursor()
@@ -232,21 +235,32 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
         self.thread = None
 
     def on_error(self, message):
-        self.stop_loading_cursor()
-        QMessageBox.critical(self, "Error", message)
-        self.thread = None
+        try:
+            self.stop_loading_cursor()
+            QMessageBox.critical(self, "Error", message)
+        except Exception as e:
+            print(f"Error displaying the message: {e}")
+        finally:
+            self.thread = None
 
 
 class WorkerProcessFiles(QObject):
 
     finished_signal = pyqtSignal()  # Define a signal for completion
+    error_signal = pyqtSignal(str)
 
-    def __init__(self, parent_widget=None):
+    def __init__(self, TrainModelPanel=None):
         super().__init__()
-        self.parent_widget = parent_widget  # Store the QWidget instance
+        self.TrainModelPanel = TrainModelPanel  # Store the QWidget instance
 
 
     def run_process_files(self):
-        self.parent_widget = process_files(self.parent_widget)
-        self.finished_signal.emit()  # Emit the finished signal when done
+        try:
+            self.TrainModelPanel = process_files(self.TrainModelPanel)
+            self.finished_signal.emit()  # Emit the finished signal when done
+        except Exception as e:
+            print("fuck this")
+            self.error_signal.emit(f"Error during prediction: {str(e)}")
+            self.TrainModelPanel.thread.quit()
+
 
