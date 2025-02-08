@@ -117,11 +117,6 @@ def process_files(TrainPanel=None, **kwargs):
     model_dir = os.path.join(working_directory, "model")
     os.makedirs(model_dir, exist_ok=True)
 
-
-    print(stain_1)
-    print("=====")
-
-
     # Process files for all species dynamically
     all_species_dataframes = []
     for species_name, species_files in species_files_names_dict.items():

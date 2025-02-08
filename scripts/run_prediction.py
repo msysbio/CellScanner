@@ -23,6 +23,9 @@ def predict(PredictionPanel=None, **kwargs):
 
     if type(PredictionPanel).__name__ == "PredictionPanel":
 
+
+        print(PredictionPanel.__dict__)
+
         # Attempt to retrieve components from file_panel first
         model, scaler, label_encoder, scaling_constant = get_model_components(PredictionPanel.file_panel)
 
