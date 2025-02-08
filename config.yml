@@ -6,7 +6,7 @@
 # Import data
 # ---------------------
 output_directory:
-  path: ./MORELES
+  path: /home/luna.kuleuven.be/u0156635/Documents/projects/CellScanner/cs_output
   required: false
   description: >
     Directory where CellScanner will save intermediate files and findings.
@@ -18,9 +18,10 @@ output_directory:
 blank_files:
   directories:
     - directory:
-        path: ./Testfiles/
+        path: /home/luna.kuleuven.be/u0156635/Documents/projects/CellScanner/CS2TutorialFiles
         filenames:
-          - control_RCM_48h_100.fcs
+          - 01-t12_d50_wc_btri_control-H7.fcs
+          - 01-t12_d50_wc_btri_control-H8.fcs
   required: true
   description: >
     In the `path` provide the directory where blanks are located.
@@ -33,14 +34,20 @@ blank_files:
 species_files:
   directories:
     - directory:
-        path: ./Testfiles/
+        path: /home/luna.kuleuven.be/u0156635/Documents/projects/CellScanner/CS2TutorialFiles
         filenames:
-          - BT_mono_48h_100.fcs
-          - FP_mono_48h_100.fcs
-          - RI_mono_48h_100.fcs
+          - 01-t12_d50_wc_btA-D1.fcs
+          - 01-t12_d50_wc_btB-D2.fcs
+          - 01-t12_d50_wc_btC-D3.fcs
+          - 01-t12_d50_wc_riA-D4.fcs
+          - 01-t12_d50_wc_riB-D5.fcs
+          - 01-t12_d50_wc_riC-D6.fcs
         species_names:
           - BT
-          - FP
+          - BT
+          - BT
+          - RI
+          - RI
           - RI
   required: true
   description: >
@@ -53,9 +60,11 @@ species_files:
 coculture_files:
   directories:
     - directory:
-        path: ./Testfiles/
+        path: /home/luna.kuleuven.be/u0156635/Documents/projects/CellScanner/CS2TutorialFiles
         filenames:
-          - coculture1_48h_100.fcs
+          - 01-t12_d50_wc_btriA-D7.fcs
+          - 01-t12_d50_wc_btriB-D8.fcs
+          - 01-t12_d50_wc_btriC-D9.fcs
   required: true
   description: >
     Provide the coculture files you wish to classify. 
@@ -224,45 +233,72 @@ gating:
     Set whether you wish data to be gated or not.
   type: bool
 
-stain1:
-  channel:
-  sign:
+#   -------------------------      For all stains     -------------------------
+#
+# To enable gating, you need to provide at least one `Stain` which requires three parameters:
+# - channel (str): takes values the exact name of a column in the coculture file.
+# - sign (str): can be either `greater_than` or `less_than`, mentioning whether the channel needs to have a value
+#          higher or lower from the one you are about to set as threshold.
+# - value (int): the threshold of the stain.
+#
+# IMPORTANT: Some visualization software may transform raw data.  !!
+# Ensure you set the threshold based on the raw data, not post-transformation.
+#
+# Gating can be applied in both training model step, to "filter" the entries used from the blanks and the monoculture s
+# but also in the prediction step.
+# CellScanner allows you to have different values for the two steps, but using different values is considered an advance use for experts.
+#
+# Last, for the prediction step, you may also apply as many line gating filters as you wish by simply adding stains in the extra_stains
+#
+#  - stain:
+#     channel:
+#     sign:
+#     value:
+#     label:
+#
+
+stain1_train:
+  channel: FITC-A
+  sign: greater_than
+  value: 2000000
+  required: false
   sign_values:
     - greater_than
     - less_than
-  value:
+  description: >
+    This stain specifically marks dead cells; 
+    Any event meeting the threshold will be classified as `dead`.
+  type: Stain
+
+stain2_train:
+  channel: PerCP-H
+  sign: greater_than
+  value: 500000
+  description: >
+    This stain specifically describes total cells; 
+    all events where the threshold is met will be classified as `cells`. The rest of the events will be classified as `debris`.
+  required: false
+  type: Stain
+
+stain1_predict:
+  channel: FITC-A
+  sign: greater_than
+  value: 2000000
   required: false
   description: >
     This stain specifically marks dead cells; 
     Any event meeting the threshold will be classified as `dead`.
-    To enable gating, you need to provide at least one `Stain` which requires three parameters:
-    - channel: takes values the exact name of a column in the coculture file.
-    - sign: can be either greater_than or less_than, mentioning whether the channel needs to have a value
-             higher or lower from the one you are about to set as threshold. 
-    - value: the threshold of the stain.
-    Important: Some visualization software may transform raw data. 
-    Ensure you set the threshold based on the raw data, not post-transformation.
-  type:
-    - channel: str
-    - sign: str
-    - value: int
+  type: Stain
 
-stain2:
-  channel: FL1-A
+stain2_predict:
+  channel: PerCP-H
   sign: greater_than
-  sign_values:
-    - greater_than
-    - less_than
-  value: 3500
+  value: 500000
   required: false
   description: >
     This stain specifically describes total cells; 
-    all events where the threshold is met will be classified as `cells`.
-    The rest of the events will be classified as `debris`.
-  type:
-    - channel: str
-    - sign: str
-    - value: int
+    all events where the threshold is met will be classified as `cells`. The rest of the events will be classified as `debris`.
+  type: Stain
 
 extra_stains:
   stains:
@@ -276,5 +312,4 @@ extra_stains:
     If you would like to apply further/other stains, please provide the 3 required parameters for each.
     In case you would like to have several, just copy-paste the `-stain` entry and the following 3 lines, as many times as you wish
     and fill in the relative information for each stain.
-  type: list of multiple
-  default: none
+  type: list of Stain
