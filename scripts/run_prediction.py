@@ -13,12 +13,15 @@ from .illustrations import species_plot, uncertainty_plot, heterogeneity_pie_cha
 
 # Main function to be called from the worker
 def predict(PredictionPanel=None, **kwargs):
+    """
+    Runs
 
+    :param PredictionPanel:
+    :param kwargs:
+    """
     gui = False
+
     if type(PredictionPanel).__name__ == "PredictionPanel":
-
-
-        print(PredictionPanel.__dict__)
 
         # Attempt to retrieve components from file_panel first
         model, scaler, label_encoder, scaling_constant = get_model_components(PredictionPanel.file_panel)
@@ -127,11 +130,12 @@ def predict(PredictionPanel=None, **kwargs):
 
     # Gating -- may return a "state" column mentioning live - dead cells, it may not
     if gating:
+
         # Apply gating
-        gating_df, all_labels = apply_gating(data_df_pred,
+        gating_df, all_labels = apply_gating(
+            data_df_pred,
             stain1,
             stain2,
-            # scaling_constant,
             extra_stains
         )
         # Save gating results
@@ -147,7 +151,6 @@ def predict(PredictionPanel=None, **kwargs):
         hetero_df = data_df_pred.copy()
 
     # Calculate heterogeneity
-
     run_heterogeneity(hetero_df, species_list, output_dir, sample)
 
     if not gui:
@@ -157,10 +160,16 @@ def predict(PredictionPanel=None, **kwargs):
 # Functions to be used by the predict()
 def predict_species(data_df, model, scaler, label_encoder, scaling_constant):
     """
-    Returns:
-    - predicted_classes (np.ndarray of ints): The predicted class indices
-    - uncertainties (np.ndarray of floats): The entropy values for each prediction
-    - index_to_species (dict): A mapping from class index to species name
+
+    :param data_df:
+    :param model:
+    :param scaler:
+    :param label_encoder:
+    :param scaling_constant:
+
+    :return predicted_classes (np.ndarray of ints): The predicted class indices
+    :return uncertainties (np.ndarray of floats): The entropy values for each prediction
+    :return index_to_species (dict): A mapping from class index to species name
     """
 
     # Select only numeric columns
@@ -188,15 +197,18 @@ def predict_species(data_df, model, scaler, label_encoder, scaling_constant):
     return predicted_classes, uncertainties, index_to_species
 
 
-def save_prediction_results(data_df: pd.DataFrame,
-                            species_list: List,
-                            output_dir: str,
-                            x_axis, y_axis, z_axis,
-                            sample: str = None,
-                            scaling_constant: int = 150,
-                            uncertainty_threshold: float = 0.5,
-                            filter_out_uncertain: bool = False
+def save_prediction_results(
+    data_df: pd.DataFrame, species_list: List,
+    output_dir: str,
+    x_axis, y_axis, z_axis,
+    sample: str = None,
+    scaling_constant: int = 150,
+    uncertainty_threshold: float = 0.5,
+    filter_out_uncertain: bool = False
     ):
+    """
+    Saves prediction file for a coculture CellScanner prediction along with its corresponding species and uncertainty plolts.
+    """
     # Ensure `data_df` is still a DataFrame and not an ndarray
     if not isinstance(data_df, pd.DataFrame):
         raise ValueError("Expected a DataFrame for `data_df`, but got something else.")
@@ -229,28 +241,36 @@ def save_prediction_results(data_df: pd.DataFrame,
 
     # Reintegrate 'predictions' and 'uncertainties' columns
     coculture_data_arcsin['predictions'] = data_df['predictions']
-    # coculture_data_arcsin['uncertainties'] = data_df['uncertainties']
 
     # Dynamically generate color map based on the number of species
     color_map = create_color_map(species_list)
 
     # Plot 1: Species Plot
-    species_plot(coc_arsin_df=coculture_data_arcsin, plot_path=plot_path_species,
-                 x_axis=x_axis, y_axis=y_axis, z_axis=z_axis, color_map=color_map
+    species_plot(
+        coc_arsin_df=coculture_data_arcsin,
+        plot_path=plot_path_species,
+        x_axis=x_axis, y_axis=y_axis, z_axis=z_axis,
+        color_map=color_map
     )
-    print("3D scatter plot (Species) saved to:", plot_path_species)
-
     # Plot 2: Uncertainty Plot
     if filter_out_uncertain:
         coculture_data_arcsin['uncertainties'] = data_df['uncertainties']
-        uncertainty_plot(coc_arcsin_df=coculture_data_arcsin, plot_path=plot_path_uncertainty,
-                        x_axis=x_axis, y_axis=y_axis, z_axis=z_axis
+        uncertainty_plot(
+            coc_arcsin_df=coculture_data_arcsin,
+            plot_path=plot_path_uncertainty,
+            x_axis=x_axis, y_axis=y_axis, z_axis=z_axis
         )
-        print("3D scatter plot (Uncertainty) saved to:", plot_path_uncertainty)
 
 
 def run_heterogeneity(df, species_list, output_dir, sample):
+    """
+    Calculate, plot and export to files heterogeneity metrics.
 
+    :param df:
+    :param species_list:
+    :param output_dir:
+    :param sample:
+    """
     # Create a directory for heterogeneity results
     heterogeneity_dir = os.path.join(output_dir, 'heterogeneity_results')
     os.makedirs(heterogeneity_dir, exist_ok=True)
@@ -258,6 +278,10 @@ def run_heterogeneity(df, species_list, output_dir, sample):
     hetero_df = df.select_dtypes(include='number')
     hetero_df.drop('uncertainties', axis=1, inplace=True)
     hetero_df['predictions'] = df['predictions']
+
+    print("\n\n>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    print(hetero_df.columns)
+    print(">>>>>>>>>>>>>>>>>>>>>>>>>>\n\n")
 
     # Compute heterogeneity measures for the sample
     try:
@@ -271,18 +295,18 @@ def run_heterogeneity(df, species_list, output_dir, sample):
     res_file = "_".join([sample, "heterogeneity_results.csv"])
     hetero_res_file = os.path.join(heterogeneity_dir, res_file)
 
-
-
-
-
+    # Compute heterogeneity metrics for each species
     hetero_results_list = []
-
-    # Compute heterogeneity measures for each species
     for species in species_list:
+
         df = hetero_df[hetero_df['predictions'] == species]
+
+        # Calculate metrics
         try:
             hetero1 = hetero_simple(df.iloc[:, :-1])
             hetero2 = hetero_mini_batch(df.iloc[:, :-1], species)
+
+            # Build heterogeneity plots
             save_heterogeneity_plots(hetero1, hetero2, heterogeneity_dir, sample, species)
 
             # Append the result as a dictionary to the list
@@ -301,48 +325,37 @@ def run_heterogeneity(df, species_list, output_dir, sample):
     hetero_results_df.to_csv(hetero_res_file, sep="\t", index=False)
 
 
-
-
-
-
-
-    # with open(hetero_res_file, "w") as f:
-    #     f.write("Species\tSimple Heterogeneity\tMedoid Heterogeneity\n")
-    #     f.write(f"Coculture overall\t{hetero1}\t{hetero2}\n")
-
-    # # Compute heterogeneity measures for each species
-    # for species in species_list:
-    #     df = hetero_df[hetero_df['predictions'] == species]
-    #     try:
-    #         hetero1 = hetero_simple(df.iloc[:, :-1])
-    #         hetero2 = hetero_mini_batch(df.iloc[:, :-1], species)
-    #         save_heterogeneity_plots(hetero1, hetero2, heterogeneity_dir, sample, species)
-    #     except ValueError as e:
-    #         raise ValueError("Error calculating heterogeneity.") from e
-    #     with open(hetero_res_file, "a") as f:
-    #         f.write(f"{species}\t{hetero1}\t{hetero2}\n")
-
-
 def hetero_simple(data):
-    # Calculate simple heterogeneity as the sum of mean ranges across all channels.
+    """Calculate simple heterogeneity as the sum of mean ranges across all channels."""
     ranges = data.apply(np.ptp, axis=0)
     return np.sum(ranges.mean())
 
 
 def hetero_mini_batch(data, species=None, type='av_diss'):
+    """
+    Uses a variant of K-Means clustering that is faster and more memory-efficient asking for a single cluster
+    similar to computing the mean (or geometric center) of all points.
+    The distance of points to this single centroid (central reference point) can be used to assess variability.
+
+    It then used this to compute the distance between each pair data point from it.
+
+    :param data:
+    :param species:
+    :param type:
+    :return result: Maximum distance between the centroid and data points
+    """
     # Use MiniBatchKMeans as an alternative
     if data.shape[0] == 0:
         if species == None:
             species = "global"
         print(f"No data for heterogeneity test for species {species}.")
         return np.nan
+    # Use MiniBatchKMeans as an alternative
     try:
         kmeans = MiniBatchKMeans(n_clusters=1, batch_size=3080, n_init=3).fit(data)
     except ValueError:
-        raise ValueError(
-            "MiniBatchKMeans failed to fit the data."
-            ""
-        )
+        raise ValueError("MiniBatchKMeans failed to fit the data.")
+
     if type == 'diameter':
         # Uses np.max()
         result = np.max(pairwise_distances(kmeans.cluster_centers_[0].reshape(1, -1), data))
@@ -353,7 +366,9 @@ def hetero_mini_batch(data, species=None, type='av_diss'):
 
 
 def save_heterogeneity_plots(hetero1, hetero2, output_dir, sample, species = None):
-
+    """
+    Exports html heterogeneity pie chart and bar plot
+    """
     # Values corresponding to each measure
     metrics_data = [hetero1, hetero2]
     labels = ['Simple Heterogeneity', 'Medoid Heterogeneity']
@@ -371,10 +386,14 @@ def save_heterogeneity_plots(hetero1, hetero2, output_dir, sample, species = Non
 
 
 def merge_prediction_results(output_dir, prediction_type):
+    """
+    Merge prediction and uncertainty output files into a single file for each case when multiple coculture files are provided.
 
+    :param output_dir: Output directory where CellScanner prediction files were saved
+    :param prediction_type: TYpe of CellScanner output file; `prediction` (counts) or `uncertainty` (heretogeneity)
+    """
     if prediction_type not in ["prediction", "uncertainty"]:
         raise ValueError(f"Please provide a valide prediction_type: 'prediction|uncertainty'")
-    dfs = []
 
     if prediction_type == "prediction":
         pattern = "_".join([prediction_type, "counts"])
@@ -383,6 +402,7 @@ def merge_prediction_results(output_dir, prediction_type):
         output_dir = os.path.join(output_dir, "heterogeneity_results")
 
     # Loop through all files in the directory
+    dfs = []
     for file_name in os.listdir(output_dir):
         if pattern not in file_name:
             continue
@@ -413,3 +433,4 @@ def get_model_components(panel):
     scaling_constant = getattr(panel, "scaling_constant", None)
     scaling_constant_value = scaling_constant.spin_box.value() if scaling_constant else None
     return model, scaler, label_encoder, scaling_constant_value
+
