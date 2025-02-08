@@ -10,6 +10,7 @@ from scripts.nn import prepare_for_training, train_neural_network
 from scripts.run_prediction import predict, merge_prediction_results
 from scripts.helpers import get_app_dir, time_based_dir, load_model_from_files, Stain
 
+
 class CellScannerCLI():
 
     def __init__(self, args):
@@ -35,10 +36,11 @@ class CellScannerCLI():
 
         # PREVIOUSLY TRAINED MODEL
         self.prev_trained_model = get_param_value("prev_trained_model", conf)
-
         if self.prev_trained_model is not None:
             self.model, self.scaler, self.le = load_model_from_files(self.prev_trained_model)
             self.scaling_constant = get_param_value("scaling_constant", conf)
+
+        # TRAINING NEW MODEL
         else:
             # Blank files
             blanks_dir = conf.get("blank_files").get("directories")
@@ -80,11 +82,36 @@ class CellScannerCLI():
 
         # Gating parameters
         self.gating = get_param_value("gating", conf)
-        self.stain_1, self.stain_2, self.extra_stains = None, None, None
+        self.stain1_train, self.stain2_train = None, None
+        self.stain1_predict, self.stain2_predict, self.extra_stains = None, None, None
         if self.gating:
-            self.stain_1 = get_stain_params("stain1", conf)
-            self.stain_2 = get_stain_params("stain2", conf)
+            # Training
+            self.stain1_train = get_stain_params("stain1_train", conf)
+            self.stain2_train = get_stain_params("stain2_train", conf)
+            # Predict
+            self.stain1_predict = get_stain_params("stain1_predict", conf)
+            self.stain2_predict = get_stain_params("stain2_predict", conf)
+            # Extra stains for predict
             self.extra_stains = get_extra_stains(conf)
+
+            self._channel_sannity_check()
+
+    def _channel_sannity_check(self):
+
+        basic_stains = [self.stain1_train, self.stain2_train, self.stain1_predict, self.stain2_predict]
+        print(self.blank_files)
+        _, data_df = fcsparser.parse(list(self.blank_files)[0], reformat_meta=True)
+
+        all_channels = data_df.columns
+
+        for stain in basic_stains:
+            if stain.channel not in all_channels:
+                raise ValueError(f"Channel provided for gating {stain.channel} not present in the .fcs files provided.")
+
+        for stain in self.extra_stains:
+            if stain not in all_channels:
+                raise ValueError(f"Channel provided for gating {stain.channel} not present in the .fcs files provided.")
+        print("Valid channel names.")
 
     def train_model(self):
         print("\nAbout to preprocess input files.")
@@ -93,7 +120,7 @@ class CellScannerCLI():
             umap_min_dist=self.umap_min_dist, nonblank_threshold=self.nn_non_blank,
             blank_threshold=self.nn_blank, species_files_names_dict=self.all_species,
             blank_files=self.blank_files, working_directory=self.output_dir,
-            stain_1=self.stain_1, stain_2=self.stain_2
+            stain_1=self.stain1_train, stain_2=self.stain2_train
         )
         print("Files processed. Preparing for training:")
         X_whitened, y_categorical, self.scaler, self.le = prepare_for_training(
@@ -115,7 +142,6 @@ class CellScannerCLI():
             working_directory=self.output_dir
         )
         print("Model complete!")
-
 
     def predict_coculture(self):
 
@@ -140,7 +166,6 @@ class CellScannerCLI():
             _, data_df = fcsparser.parse(sample_file, reformat_meta=True)
 
             if 'Time' in data_df.columns:
-                print()
                 data_df = data_df.drop(columns=['Time'])
 
             if self.x_axis or self.y_axis or self.z_aixs not in data_df.columns:
@@ -164,15 +189,15 @@ class CellScannerCLI():
                 "gating": self.gating,
                 "scaling_constant": self.scaling_constant,
                 "filter_out_uncertain": self.filter_out_uncertain,
-                "uncertainty_threshold": self.uncertainty_threshold,
-                "extra_stains": self.extra_stains
+                "uncertainty_threshold": self.uncertainty_threshold
             }
 
             # Add specific parameters based on gating
             if self.gating:
                 predict_params.update({
-                    "stain1": self.stain_1,
-                    "stain2": self.stain_2
+                    "stain1": self.stain1_predict,
+                    "stain2": self.stain2_predict,
+                    "extra_stains": self.extra_stains
                 })
 
             # Call predict function; df is the prediction dataframe after entropy filtering if step is applied
@@ -280,7 +305,12 @@ def get_param_value(param, conf):
 
 
 def get_extra_stains(conf):
+    """
+    Get extra stains provided by the user
 
+    :return extra_stains (Dict): A dictionary with channel name as key and a set with the sign, threshold and label
+    of the stain as value
+    """
     extra_stains = {}
     extras = conf.get("extra_stains").get("stains")
     for stain in  extras:
@@ -288,8 +318,8 @@ def get_extra_stains(conf):
         sign = stain.get("sign")
         threshold = stain.get("value")
         label = stain.get("label")
-        extra_stains[channel]  = (sign, threshold, label)
-
+        if all(x is not None for x in (channel, sign, threshold, label)):
+            extra_stains[channel]  = (sign, threshold, label)
     return extra_stains
 
 
@@ -314,7 +344,7 @@ def build_stain(stain, channel, sign, value):
     return Stain(channel=channel, sign=sign, value=value)
 
 
-
+# Main function to run CellScanner from the CLI
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="CellScanner Command Line Interface")

@@ -46,10 +46,7 @@ def process_file(file, species_name, n_events, stain_1, stain_2, model_dir):    
             except ValueError as e:
                 raise ValueError(f"Error processing species {species_name}: {e}") from e
 
-
             # Print and write columns to the file
-            print("df.columns\n", df.columns)
-            print("gated_df.columns\n", gated_df.columns)
             f.write(f"df.columns: {df.columns.tolist()}\n")
             f.write(f"gated_df.columns: {gated_df.columns.tolist()}\n")
 
@@ -87,7 +84,6 @@ def process_files(TrainPanel=None, **kwargs):
             "species_files_names_dict": TrainPanel.file_panel.species_files,
             "blank_files": TrainPanel.file_panel.blank_files,
             "working_directory": TrainPanel.file_panel.working_directory,
-
         }
 
         gating = TrainPanel.gating_checkbox.isChecked()

@@ -26,14 +26,20 @@ Classes:
 Usage:
 - The `TrainModelPanel` is integrated into the main application window and handles the entire model training pipeline.
 
-Authors: Ermis Ioannis Michail Delopoulos, Haris Zafeiropoulos
-Date: 22/08/2024
+Authors:
+ - Ermis Ioannis Michail Delopoulos
+ - Haris Zafeiropoulos
+
+Date: 2024-2025
 """
 
 class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheckBox):
 
     def __init__(self, file_panel, parent=None):
+        """
+        Training panel using the mixin classes for gating
 
+        """
         super().__init__(parent)
         self.file_panel = file_panel
         self.layout = QVBoxLayout(self)
@@ -243,9 +249,14 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
         finally:
             self.thread = None
 
-
+# A worker class allows tasks without blocking the main UI thread,
 class WorkerProcessFiles(QObject):
+    """
+    Worker class for processing files in a separate thread.
 
+    This worker is responsible for running `process_files()` without freezing the main UI.
+    It emits signals to indicate success or failure, allowing the main UI to handle errors properly.
+    """
     finished_signal = pyqtSignal()  # Define a signal for completion
     error_signal = pyqtSignal(str)
 
@@ -262,5 +273,4 @@ class WorkerProcessFiles(QObject):
             print("fuck this")
             self.error_signal.emit(f"Error during prediction: {str(e)}")
             self.TrainModelPanel.thread.quit()
-
 
