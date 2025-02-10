@@ -6,7 +6,7 @@
 # Import data
 # ---------------------
 output_directory:
-  path: CellScanner/cs_output
+  path: Testfiles/cs_output
   required: false
   description: >
     Directory where CellScanner will save intermediate files and findings.
@@ -18,7 +18,7 @@ output_directory:
 blank_files:
   directories:
     - directory:
-        path: CellScanner/CS2TutorialFiles
+        path: Testfiles/CS2TutorialFiles
         filenames:
           - 01-t12_d50_wc_btri_control-H7.fcs
           - 01-t12_d50_wc_btri_control-H8.fcs
@@ -34,7 +34,7 @@ blank_files:
 species_files:
   directories:
     - directory:
-        path: CellScanner/CS2TutorialFiles
+        path: Testfiles/CS2TutorialFiles
         filenames:
           - 01-t12_d50_wc_btA-D1.fcs
           - 01-t12_d50_wc_btB-D2.fcs
@@ -60,7 +60,7 @@ species_files:
 coculture_files:
   directories:
     - directory:
-        path: CellScanner/CS2TutorialFiles
+        path: Testfiles/CS2TutorialFiles
         filenames:
           - 01-t12_d50_wc_btriA-D7.fcs
           - 01-t12_d50_wc_btriB-D8.fcs
