@@ -51,12 +51,12 @@ def process_file(file, species_name, n_events, stain_1, stain_2, model_dir):    
             f.write(f"gated_df.columns: {gated_df.columns.tolist()}\n")
 
             # Apply gating for stain 1 if channel is not None
-            if stain_1.channel is not None:
+            if isinstance(stain_1, Stain) and stain_1.channel:
                 df = df[gated_df["dead"] == False]
                 f.write(f"number of entries after gating for stain1: {df.shape}\n")
 
             # Apply gating for stain 2 if channel is not None
-            if stain_2.channel is not None:
+            if isinstance(stain_2, Stain) and stain_2.channel:
                 df = df[gated_df["cell"] == True]
                 f.write(f"number of entries after gating for stain2: {df.shape}\n")
 
@@ -90,7 +90,6 @@ def process_files(TrainPanel=None, **kwargs):
 
         if gating:
             stain_1, stain_2 = get_stains_from_panel(TrainPanel)
-            print("Stains loaded:", stain_1)
         else:
             stain_1, stain_2 = None, None
         gui = True

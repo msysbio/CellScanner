@@ -258,6 +258,16 @@ gating:
 #
 
 stain1_train:
+  channel: PerCP-H
+  sign: greater_than
+  value: 500000
+  description: >
+    This stain specifically describes total cells; 
+    all events where the threshold is met will be classified as `cells`. The rest of the events will be classified as `debris`.
+  required: false
+  type: Stain
+
+stain2_train:
   channel: FITC-A
   sign: greater_than
   value: 2000000
@@ -270,17 +280,17 @@ stain1_train:
     Any event meeting the threshold will be classified as `dead`.
   type: Stain
 
-stain2_train:
+stain1_predict:
   channel: PerCP-H
   sign: greater_than
   value: 500000
+  required: false
   description: >
     This stain specifically describes total cells; 
     all events where the threshold is met will be classified as `cells`. The rest of the events will be classified as `debris`.
-  required: false
   type: Stain
 
-stain1_predict:
+stain2_predict:
   channel: FITC-A
   sign: greater_than
   value: 2000000
@@ -288,16 +298,6 @@ stain1_predict:
   description: >
     This stain specifically marks dead cells; 
     Any event meeting the threshold will be classified as `dead`.
-  type: Stain
-
-stain2_predict:
-  channel: PerCP-H
-  sign: greater_than
-  value: 500000
-  required: false
-  description: >
-    This stain specifically describes total cells; 
-    all events where the threshold is met will be classified as `cells`. The rest of the events will be classified as `debris`.
   type: Stain
 
 extra_stains:
