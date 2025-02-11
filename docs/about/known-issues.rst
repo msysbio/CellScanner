@@ -7,7 +7,7 @@ Please see the following links:
 
 .. bullet_list::
 
-    - :link:`Issues on GitHub <{GitHubLink}/issues>`
+    - :link:`Issues on GitHub <https://github.com/msysbio/cellscanner/issues>`
 
 .. Example for hyperlink:
 .. :link:`asdas <https://www.ncbi.nlm.nih.gov/taxonomy/?term=39946>`
