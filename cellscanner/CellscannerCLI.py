@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 CellScanner Command Line Interface main class.
 
@@ -12,11 +13,10 @@ import fcsparser
 from collections import defaultdict
 
 # Load CellScanner features
+from scripts.run_prediction import predict
 from scripts.apply_umap import process_files
 from scripts.nn import prepare_for_training, train_neural_network
-from scripts.run_prediction import predict, merge_prediction_results
-from scripts.helpers import get_app_dir, time_based_dir, load_model_from_files, Stain
-
+from scripts.helpers import get_app_dir, time_based_dir, load_model_from_files, merge_prediction_results, Stain
 
 class CellScannerCLI():
 
@@ -92,12 +92,15 @@ class CellScannerCLI():
         self.stain1_train, self.stain2_train = None, None
         self.stain1_predict, self.stain2_predict, self.extra_stains = None, None, None
         if self.gating:
+
             # Training
             self.stain1_train = get_stain_params("stain1_train", conf)
             self.stain2_train = get_stain_params("stain2_train", conf)
+
             # Predict
             self.stain1_predict = get_stain_params("stain1_predict", conf)
             self.stain2_predict = get_stain_params("stain2_predict", conf)
+
             # Extra stains for predict
             self.extra_stains = get_extra_stains(conf)
 
@@ -108,18 +111,22 @@ class CellScannerCLI():
         Checks whether a channel provided by the user is actually amont those on the .fcs files.
         """
         basic_stains = [self.stain1_train, self.stain2_train, self.stain1_predict, self.stain2_predict]
-        print(self.blank_files)
-        _, data_df = fcsparser.parse(list(self.blank_files)[0], reformat_meta=True)
+
+        if self.prev_trained_model is None:
+            _, data_df = fcsparser.parse(list(self.blank_files)[0], reformat_meta=True)
+        else:
+            _, data_df = fcsparser.parse(list(self.coculture_files)[0], reformat_meta=True)
 
         all_channels = data_df.columns
 
         for stain in basic_stains:
-            if stain.channel not in all_channels:
+            if stain.channel is not None and stain.channel not in all_channels:
                 raise ValueError(f"Channel provided for gating {stain.channel} not present in the .fcs files provided.")
 
         for stain in self.extra_stains:
             if stain not in all_channels:
                 raise ValueError(f"Channel provided for gating {stain.channel} not present in the .fcs files provided.")
+
         print("Valid channel names.")
 
     def train_model(self):
@@ -351,9 +358,12 @@ def get_stain_params(stain, conf):
 
 def build_stain(stain, channel, sign, value):
     # Check if all stain params are there
-    if not all([sign, value]) and channel!=None:
+    if not all([sign, value]) and channel is not None:
         missing = [k for k, v in {"channel": channel, "sign": sign, "value": value}.items() if v is None]
         raise ValueError(f"Please provide {' and '.join(missing)} for {stain}.")
+
+    elif channel is None:
+        return Stain(channel=None, sign=None, value=None)
 
     return Stain(channel=channel, sign=sign, value=value)
 

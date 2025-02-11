@@ -211,12 +211,14 @@ def apply_gating(data_df: pd.DataFrame,
 
             gated_data_df["state"] = "debris"
 
-            gated_data_df["state"].loc[
-                (gated_data_df["dead"] == False) & (gated_data_df["cell"] == True)
+            gated_data_df.loc[
+                (gated_data_df["dead"] == False) & (gated_data_df["cell"] == True),    # NOTE: use loc to accesses the rows where the condition is met.
+                "state"                                                                # NOTE: new syntax, specifies the column you want to modify.
             ] = "live"
 
-            gated_data_df["state"].loc[
-                (gated_data_df["dead"] == True) & (gated_data_df["cell"] == True)
+            gated_data_df.loc[
+                (gated_data_df["dead"] == True) & (gated_data_df["cell"] == True),
+                "state"
             ] = "inactive"
 
             all_labels.append("state")
@@ -236,7 +238,6 @@ def apply_gating(data_df: pd.DataFrame,
             all_labels.append(label)
 
     return gated_data_df, all_labels
-
 
 
 def save_gating_results(gated_data_df, output_dir, sample, x_axis, y_axis, z_axis, all_labels):
@@ -285,10 +286,119 @@ def save_gating_results(gated_data_df, output_dir, sample, x_axis, y_axis, z_axi
     combined_counts_df.to_csv(
         os.path.join(gated_dir, "_".join([sample,'gating.csv']))
     )
-
+    print(
+        f"File with gating counts for sample {sample} saved at:\n",
+        os.path.join(gated_dir, "_".join([sample,'gating.csv']))
+    )
+    gated_data_df.to_csv(
+        os.path.join(gated_dir, "_".join([sample, 'raw', 'gating.csv']))
+    )
+    print(
+        f"File with gating raw findings for sample {sample} saved at:\n",
+        os.path.join(gated_dir, "_".join([sample, 'raw', 'gating.csv']))
+    )
     # Plot status if both stains provided
     gating_plot(gated_data_df, species_names, x_axis, y_axis, z_axis, gated_dir, sample, all_labels)
-
     print("3D scatter plot for gated data saved to:", gated_dir)
 
 
+def merge_prediction_results(output_dir, prediction_type):
+    """
+    Merge prediction and uncertainty output files into a single file for each case when multiple coculture files are provided.
+
+    :param output_dir: Output directory where CellScanner prediction files were saved
+    :param prediction_type: Type of CellScanner output file; 'prediction' (counts) or 'uncertainty' (heretogeneity)
+    """
+
+    if prediction_type not in ["prediction", "uncertainty"]:
+        raise ValueError(f"Please provide a valide prediction_type: 'prediction|uncertainty'")
+
+    if prediction_type == "prediction":
+
+        patterns = ["_".join([prediction_type, "counts"]), "state_counts", "dead_counts", "cell_counts" ]
+
+        # Loop through all files in the directory
+        dfs = []
+        for file_name in os.listdir(output_dir):
+
+            matched_pattern = next((pattern for pattern in patterns if pattern in file_name), None)
+            if matched_pattern is None:
+                continue  # Skip files that don't match any pattern
+
+            file_path = os.path.join(output_dir, file_name)
+
+            # Read each file as a DataFrame
+            df = pd.read_csv(file_path, index_col = 0)  # Make sure you keep first column as index of the dataframe
+
+            # Build a one-column dataframe using index and column names as index
+            pairwise_list = [
+                (f"{pred}_{state}", df.loc[pred, state])
+                for pred in df.index
+                for state in df.columns
+            ]
+            # Name the "count" column based on the filename (without extension)
+            new_column_name = file_name.split(matched_pattern)[0][:-1]
+            one_col_df = pd.DataFrame(pairwise_list, columns=["category", new_column_name]).set_index("category")
+            if any(key in matched_pattern for key in ["dead", "cells"]):
+                label = matched_pattern.split("_")[0]
+                one_col_df.index = one_col_df.index.str.replace("_True", f"_{label}").str.replace("_False", f"_{label}_False")
+
+            dfs.append(one_col_df)
+
+            pattern = matched_pattern
+
+        # Merge all DataFrames on the "predictions" column
+        result = pd.concat(dfs, axis=1)
+
+    else:
+
+        pattern = "heterogeneity_results"
+        output_dir = os.path.join(output_dir, "heterogeneity_results")
+
+        # Loop through all files in the directory
+        dfs = []
+        for file_name in os.listdir(output_dir):
+            if pattern not in file_name:
+                continue
+            file_path = os.path.join(output_dir, file_name)
+
+            # Read each file as a DataFrame
+            df = pd.read_csv(file_path, sep=",")  # Adjust separator if needed
+
+            # Rename the "count" column to the filename (without extension)
+            new_column_name = file_name.split(pattern)[0][:-1]
+            df = df.rename(columns={"count": new_column_name})
+            dfs.append(df)
+
+        # Merge all DataFrames on the "predictions" column
+        result = pd.concat(dfs, axis=1).loc[:,~pd.concat(dfs, axis=1).columns.duplicated()]
+
+    # Save the final result to a CSV file
+    try:
+        merged_filename = "".join(["merged_", pattern, ".csv"])
+        merged_file = os.path.join(output_dir, merged_filename)
+        result.to_csv(merged_file, index=True)
+    except:
+        print("No merging case. Please go through the output files of each sample.")
+
+def compute_label_counts(gating_df, all_labels, output_dir, sample):
+    """
+    Computes value counts for each label grouped by 'predictions' in the gating_df.
+
+    Parameters:
+    - gating_df (pd.DataFrame): The input DataFrame containing 'predictions' and label columns.
+    - all_labels (list): List of label columns to compute counts for.
+    - output_dir (str): Directory where output files should be saved.
+    - sample (str): Sample identifier used for naming output files.
+    - create_file_path (function): Function to generate output file paths.
+
+    Returns:
+    - dict: A dictionary mapping output file paths to computed count DataFrames.
+    """
+    output_data = {}
+    for label in all_labels:
+        all_counts = gating_df.groupby("predictions")[label].value_counts().unstack(fill_value=0)
+        outputfile = create_file_path(output_dir, sample, "_".join([label, "counts"]), "csv")
+        output_data[outputfile] = all_counts
+
+    return output_data

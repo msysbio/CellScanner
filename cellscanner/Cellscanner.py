@@ -67,7 +67,8 @@ class NeuralNetworkGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("CellScanner")
-        self.setGeometry(100, 100, 850, 1800)
+        # setGeometry(x, y, width, height) x, y stand for top-left corner
+        self.setGeometry(100, 100, 950, 2100)
 
         # Initialize model-related attributes
         self.model = None

@@ -23,8 +23,8 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject
 
 import os
 
-from .helpers import time_based_dir
-from .run_prediction import predict, merge_prediction_results
+from .run_prediction import predict
+from .helpers import time_based_dir, merge_prediction_results
 from .GUIhelpers import (
     button_style, _GuiMessages, AxisSelector, LiveDeadDebrisSelectors, GatingMixin, GatingCheckBox,
     iterate_stains, load_fcs_file

@@ -33,7 +33,7 @@ class StainSelector(QWidget):
     Set of boxes for the user to choose among the channels on the .fcs as the channel to be used for a stain,
     its sign (>,<) and to set its value (an integer).
     """
-    def __init__(self, label_text, tooltip_text, parent=None):
+    def __init__(self, label_text, tooltip_text, label, parent=None):
         super().__init__(parent)
         layout = QHBoxLayout(self)
 
@@ -47,7 +47,7 @@ class StainSelector(QWidget):
 
         self.threshold = QLineEdit(self)
         self.threshold.setPlaceholderText(
-            "Enter threshold. All events where the threshold is met will be classified as dead."
+            "Enter threshold. All events where the threshold is met will be classified as {label}."
         )
 
         layout.addWidget(self.label)
@@ -199,10 +199,6 @@ class GatingMixin:
                 for selector in self.stain_selectors:
                     selector.set_items(self.file_panel.numeric_colums_set)
 
-        else:
-            print(self.get_host_class_name())
-
-
         for selector in self.stain_selectors:
             selector.label.setVisible(is_checked)
             selector.combo.setVisible(is_checked)
@@ -267,8 +263,8 @@ class LiveDeadDebrisSelectors:
         )
 
         # Pair of basic stains
-        self.stain1_selector = StainSelector("Staining inactive cells (e.g. PI):", tooltip_for_stain_1, self)
-        self.stain2_selector = StainSelector("Staining all cells (e.g. SYBR/DAPI):", tooltip_for_stain_2, self)
+        self.stain1_selector = StainSelector("Staining inactive cells (e.g. PI):", tooltip_for_stain_1, "dead", self)
+        self.stain2_selector = StainSelector("Staining all cells (e.g. SYBR/DAPI):", tooltip_for_stain_2, "cell", self)
 
         try:
             self.predict_panel_layout.addWidget(self.stain1_selector)

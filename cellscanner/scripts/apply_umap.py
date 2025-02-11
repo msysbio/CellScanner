@@ -47,6 +47,7 @@ def process_file(file: str, species_name: str, n_events: int, stain_1: Stain, st
     else:
         # Apply gating
         with open(os.path.join(model_dir, "gating_input_data.txt"), "w") as f:
+
             # Writing species name and original number of entries
             f.write(f"species name: {species_name}\n")
             f.write(f"original number of entries: {df.shape}\n")
@@ -176,6 +177,7 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
             raise(f"Error processing blank file {blank_file}: {e}") from e
 
     # Combine data
+    print("Build unified dataframe")
     combined_df = pd.concat([df for species_dataframes in all_species_dataframes for df in species_dataframes] + blank_dataframes)
     columns_to_plot = combined_df.columns.difference(['Species']).tolist()  # All column names except of those in the list
     data_subset = combined_df[columns_to_plot].values
@@ -183,6 +185,8 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
     # -----------------------------------------------
     # Implement dimensionality reduction using UMAP
     # -----------------------------------------------
+
+    print("Run UMAP...")
 
     # Scale: (x - u) / s
     scaled_data_subset = StandardScaler().fit_transform(data_subset)
@@ -197,7 +201,6 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
     # Run UMAP: Fit and transform the data
     embedding = reducer.fit_transform(scaled_data_subset)
 
-    #
     mapped_labels = combined_df['Species'].map(label_map).values
 
     # Nearest Neighbors filtering

@@ -8,7 +8,7 @@ from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics import pairwise_distances
 from scipy.stats import entropy
 
-from .helpers import create_file_path, get_stains_from_panel, apply_gating, save_gating_results
+from .helpers import create_file_path, get_stains_from_panel, apply_gating, save_gating_results, compute_label_counts
 from .illustrations import species_plot, uncertainty_plot, heterogeneity_pie_chart, heterogeneity_bar_plot, create_color_map
 
 # Main function to be called from the worker
@@ -116,21 +116,10 @@ def predict(PredictionPanel=None, **kwargs):
     if filter_out_uncertain:
         data_df_pred.loc[data_df_pred["uncertainties"] > uncertainty_threshold, "predictions"] = "Unknown"
 
-    # Save prediction results and plot the 3D scatter plot
-    species_list = list(index_to_species.values())
-    save_prediction_results(
-        data_df_pred,
-        species_list,
-        output_dir,
-        x_axis_combo, y_axis_combo, z_axis_combo,
-        sample=sample,
-        scaling_constant=scaling_constant,
-        uncertainty_threshold=uncertainty_threshold,
-        filter_out_uncertain=filter_out_uncertain
-    )
-
     # Gating -- may return a "state" column mentioning live - dead cells, it may not
     if gating:
+
+        print("Run gating...")
 
         # Apply gating
         gating_df, all_labels = apply_gating(
@@ -152,7 +141,22 @@ def predict(PredictionPanel=None, **kwargs):
         hetero_df = data_df_pred.copy()
 
     # Calculate heterogeneity
+    species_list = list(index_to_species.values())
     run_heterogeneity(hetero_df, species_list, output_dir, sample)
+
+    # Save prediction results and plot the 3D scatter plot
+    save_prediction_results(
+        data_df_pred,
+        species_list,
+        output_dir,
+        x_axis_combo, y_axis_combo, z_axis_combo,
+        sample=sample,
+        scaling_constant=scaling_constant,
+        uncertainty_threshold=uncertainty_threshold,
+        filter_out_uncertain=filter_out_uncertain,
+        gating_df = gating_df if 'gating_df' in locals() else None,
+        all_labels = all_labels if 'all_labels' in locals() else None
+    )
 
     if not gui:
         return data_df_pred
@@ -205,10 +209,12 @@ def save_prediction_results(
     sample: str = None,
     scaling_constant: int = 150,
     uncertainty_threshold: float = 0.5,
-    filter_out_uncertain: bool = False
+    filter_out_uncertain: bool = False,
+    gating_df: pd.DataFrame = None,
+    all_labels: list = None
     ):
     """
-    Saves prediction file for a coculture CellScanner prediction along with its corresponding species and uncertainty plolts.
+    Saves prediction file for a coculture sample CellScanner prediction along with its corresponding species and uncertainty plolts.
     """
     # Ensure `data_df` is still a DataFrame and not an ndarray
     if not isinstance(data_df, pd.DataFrame):
@@ -219,27 +225,52 @@ def save_prediction_results(
     outfile_prediction_counts = create_file_path(output_dir, sample, 'prediction_counts', 'csv')
     plot_path_species = create_file_path(output_dir, sample, '3D_coculture_predictions_species', 'html')
 
-    # Save predictions and prediction counts to a CSV file
+    # Save raw predictions and prediction counts to a CSV file
     data_df.to_csv(outfile_predictions)
-    prediction_counts = data_df['predictions'].value_counts()
-    prediction_counts.to_csv(outfile_prediction_counts)
-    print("Prediction counts saved to:", outfile_prediction_counts)
-
-
-    print("\n\n>>uncertainty_threshold")
-    print(uncertainty_threshold)
-
 
     # Calculate and save uncertainty counts by species
     if filter_out_uncertain:
-        outfile_uncertainties = create_file_path(output_dir, sample, 'uncertainty_counts', 'csv')
-        plot_path_uncertainty = create_file_path(output_dir, sample, '3D_coculture_predictions_uncertainty', 'html')
+        uncertaint_dir = os.path.join(output_dir, "uncertainty_counts")
+        os.makedirs(uncertaint_dir, exist_ok=True)
+        outfile_uncertainties = create_file_path(uncertaint_dir, sample, 'uncertainty_counts', 'csv')
+        plot_path_uncertainty = create_file_path(uncertaint_dir, sample, '3D_coculture_predictions_uncertainty', 'html')
         uncertainty_counts = data_df.groupby('predictions')['uncertainties'].agg(
             greater_than=lambda x: (x > uncertainty_threshold).sum(),
             less_than=lambda x: (x <= uncertainty_threshold).sum()
         )
         uncertainty_counts.to_csv(outfile_uncertainties)
         print("Uncertainty counts by species saved to:", outfile_uncertainties)
+
+    # Save counts based on whether gating and/or uncertainty filtering has been applied
+    output_data = {}  # output_file: data
+    if filter_out_uncertain and gating_df is not None:
+
+        print("Both gating and uncertainty filter..")
+        df = gating_df[gating_df["uncertainties"] < uncertainty_threshold]
+        output_data.update(compute_label_counts(gating_df, all_labels, output_dir, sample))
+
+    elif gating_df is not None:
+        print("Only gating..")
+        output_data.update(compute_label_counts(gating_df, all_labels, output_dir, sample))
+
+    elif filter_out_uncertain:
+        print("Only uncertainty filter..")
+        df = data_df[data_df["uncertainties"] < uncertainty_threshold]
+        all_counts = df['predictions'].value_counts()
+        output_data[outfile_prediction_counts] = all_counts
+
+    else:
+        print("No gating, no uncertainty filter..")
+        all_counts = data_df['predictions'].value_counts()
+        output_data[outfile_prediction_counts] = all_counts
+
+    # Save sample's counts
+    for outfile, df in output_data.items():
+        df.to_csv(outfile)
+
+    # ----------------
+    # PLOTS
+    # ----------------
 
     # Perform arcsinh transformation on numeric columns
     coculture_data_numeric = data_df.drop(columns=['predictions', 'uncertainties'])
@@ -282,7 +313,11 @@ def run_heterogeneity(df, species_list, output_dir, sample):
     os.makedirs(heterogeneity_dir, exist_ok=True)
 
     hetero_df = df.select_dtypes(include='number')
-    hetero_df.drop('uncertainties', axis=1, inplace=True)
+    try:
+        hetero_df.drop('uncertainties', axis=1, inplace=True)
+    except:
+        print("No uncertainties; dropped in gating_df.drop(columns=all_labels).")
+        pass
     hetero_df['predictions'] = df['predictions']
 
     # Compute heterogeneity measures for the sample
@@ -303,8 +338,8 @@ def run_heterogeneity(df, species_list, output_dir, sample):
             hetero1 = hetero_simple(df.iloc[:, :-1])
             hetero2 = hetero_mini_batch(df.iloc[:, :-1], species)
 
-            # Build heterogeneity plots
-            save_heterogeneity_plots(hetero1, hetero2, heterogeneity_dir, sample, species)
+            # # Build heterogeneity plots  --  decided not to plot
+            # save_heterogeneity_plots(hetero1, hetero2, heterogeneity_dir, sample, species)
 
             # Append the result as a dictionary to the list
             hetero_results_list.append({
@@ -382,44 +417,6 @@ def save_heterogeneity_plots(hetero1, hetero2, output_dir, sample, species = Non
 
     # Bar chart
     heterogeneity_bar_plot(labels, metrics_data, colors, output_dir, sample, species, plot_width, plot_height)
-
-
-def merge_prediction_results(output_dir, prediction_type):
-    """
-    Merge prediction and uncertainty output files into a single file for each case when multiple coculture files are provided.
-
-    :param output_dir: Output directory where CellScanner prediction files were saved
-    :param prediction_type: Type of CellScanner output file; 'prediction' (counts) or 'uncertainty' (heretogeneity)
-    """
-    if prediction_type not in ["prediction", "uncertainty"]:
-        raise ValueError(f"Please provide a valide prediction_type: 'prediction|uncertainty'")
-
-    if prediction_type == "prediction":
-        pattern = "_".join([prediction_type, "counts"])
-    else:
-        pattern = "heterogeneity_results"
-        output_dir = os.path.join(output_dir, "heterogeneity_results")
-
-    # Loop through all files in the directory
-    dfs = []
-    for file_name in os.listdir(output_dir):
-        if pattern not in file_name:
-            continue
-        file_path = os.path.join(output_dir, file_name)
-        # Read each file as a DataFrame
-        df = pd.read_csv(file_path, sep=",")  # Adjust separator if needed
-        # Rename the "count" column to the filename (without extension)
-        new_column_name = file_name.split(pattern)[0][:-1]
-        df = df.rename(columns={"count": new_column_name})
-        dfs.append(df)
-
-    # Merge all DataFrames on the "predictions" column
-    result = pd.concat(dfs, axis=1).loc[:,~pd.concat(dfs, axis=1).columns.duplicated()]
-
-    # Save the final result to a CSV file
-    merged_filename = "".join(["merged_", pattern, ".csv"])
-    merged_file = os.path.join(output_dir, merged_filename)
-    result.to_csv(merged_file, index=False)
 
 
 def get_model_components(panel):
