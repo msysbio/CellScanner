@@ -23,6 +23,7 @@ CellScanner
    :maxdepth: 3
    :caption: Tutorial
 
+   tutorials/install
    tutorials/gui
 
 
