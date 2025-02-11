@@ -1,3 +1,7 @@
+"""
+A set of classes to support the GUI.
+
+"""
 import os
 import fcsparser
 import numpy as np
@@ -8,6 +12,9 @@ from PyQt5.QtWidgets import (
 )
 
 class AxisSelector(QWidget):
+    """
+    Box for the user to choose among the channels on the .fcs as the channel to be plotted in the 3D-plots.
+    """
     def __init__(self, label_text, parent=None):
         super().__init__(parent)
         layout = QHBoxLayout(self)
@@ -22,6 +29,10 @@ class AxisSelector(QWidget):
 
 
 class StainSelector(QWidget):
+    """
+    Set of boxes for the user to choose among the channels on the .fcs as the channel to be used for a stain,
+    its sign (>,<) and to set its value (an integer).
+    """
     def __init__(self, label_text, tooltip_text, parent=None):
         super().__init__(parent)
         layout = QHBoxLayout(self)
@@ -53,7 +64,20 @@ class StainSelector(QWidget):
 
 
 class LabeledComboBox(QWidget):
+    """
+    A labeled combo box widget for selecting parameter values from a predefined list.
 
+    This widget consists of a label and a combo box, allowing users to select a value
+    from a specified list. It is useful for settings where choices are restricted to
+    predefined options.
+
+    Args:
+        label_text (str): The text to display in the label.
+        items (list of str, optional): The list of selectable values for the combo box. Defaults to an empty list.
+        default (str, optional): The default value to be pre-selected in the combo box. If specified, must be included in the items.
+        parent (QWidget, optional): The parent widget, if applicable.
+
+    """
     def __init__(self, label_text, items=None, default=None, parent=None):
         super().__init__(parent)
 
@@ -77,6 +101,32 @@ class LabeledComboBox(QWidget):
 
 
 class LabeledSpinBox(QWidget):
+    """
+    A labeled spin box widget for selecting integer values within a specified range.
+
+    This widget consists of a label and a spin box, allowing users to select a numerical
+    value by incrementing or decrementing within a defined range.
+
+    Example:
+        A spin box for setting a parameter with a range from 10 to 100, step size of 5,
+        and default value of 20:
+
+        ```
+        spin_box = LabeledSpinBox("Select Value:", min_value=10, max_value=100, step=5, default_value=20)
+        ```
+
+    Attributes:
+        label (QLabel): A Qlabel displaying the provided label text.
+        spin_box (QSpinBox): A spin box allowing integer selection.
+
+    Args:
+        label_text (str): The text to display in the label.
+        min_value (int, optional): The minimum allowable value in the spin box. Default is 0.
+        max_value (int, optional): The maximum allowable value in the spin box. Default is 1000.
+        step (int, optional): The increment/decrement step size. Default is 1.
+        default_value (int, optional): The default selected value in the spin box. Default is 0.
+        parent (QWidget, optional): The parent widget, if applicable.
+    """
     def __init__(self, label_text, min_value=0, max_value=1000, step=1, default_value=0, parent=None):
         super().__init__(parent)
 
@@ -135,10 +185,11 @@ class GatingMixin:
     A thread on mixin:
     https://stackoverflow.com/questions/533631/what-is-a-mixin-and-why-is-it-useful
 
-    This mixin defines the `toggle_gating_options` method, which shows or hides
+    This mixin defines the :func:`toggle_gating_options` method, which shows or hides
     UI elements related to gating based on the state of a checkbox.
     """
     def toggle_gating_options(self):
+        """Displays or conceals gating options contingent on the gating checkbox state."""
         is_checked = self.gating_checkbox.isChecked()
 
         if self.get_host_class_name() == "TrainModelPanel":
@@ -169,12 +220,13 @@ class GatingMixin:
 
 class GatingCheckBox:
     """
+
     """
     def gating_checkbox(self):
         # Add a checkbox to apply gating
         self.gating_layout =  QVBoxLayout()
         self.gating_checkbox = QCheckBox("Apply line gating", self)
-        self.gating_checkbox.setToolTip(GuiMessages.GATING_CHECHBOX)
+        self.gating_checkbox.setToolTip(_GuiMessages.GATING_CHECHBOX)
         self.gating_layout.addChildWidget(self.gating_checkbox)
         self.gating_checkbox.stateChanged.connect(self.toggle_gating_options)
         try:
@@ -185,7 +237,7 @@ class GatingCheckBox:
         # Add message for strain thresholds
         self.thresholds_layout = QHBoxLayout()
         self.threshold_message = QLabel(
-            GuiMessages.GATING_THRESHOLD,
+            _GuiMessages.GATING_THRESHOLD,
             self
         )
         self.thresholds_layout.addWidget(self.threshold_message)
@@ -232,8 +284,10 @@ class LiveDeadDebrisSelectors:
 
 
 # ToolTips
-class GuiMessages:
-
+class _GuiMessages:
+    """
+    Messages to be shown acrross the app.
+    """
     UNCERTAINTY_TOOLTIP = (
         "Set threshold for filtering out uncertain predictions. "
         "If you just trained a model, CellScanner computed already the threshold allowing the highest accuracy and set it as default. "
@@ -277,15 +331,19 @@ class GuiMessages:
         "Every time you click on the Select Files button, previsouly selected files are removed."
     )
 
+    OUTPUT_DIR = (
+        "Optional. Provide output directory where intermediate files and predictions will be saved."
+    )
+
 
 def load_fcs_file(fcss):
     """
+    Loads .fcs file from a list of .fcs files.
+
     :param fcss: List of fcs files provided by the user
-    :return sample_to_df:
-    :return sample_numeric_columns:
+    :return sample_to_df: a dictionary with sample name as key and the dataframe with the fcs data loaded as their value
+    :return sample_numeric_columns: a dictionary with sample name as key and the number columnns of the dataframe with the fcs data loaded as their value
     """
-
-
     sample_to_df = {}
     sample_numeric_columns = {}
 
@@ -305,3 +363,29 @@ def load_fcs_file(fcss):
 
     return sample_to_df, sample_numeric_columns, numeric_columns
 
+
+def button_style(
+    font_size=12, padding=5, color="black", bck_col="#90EE90",
+    bck_col_hov="#7FCF7F", bck_col_clicked="#72B572", radius=5
+    ):
+    """
+    A button style
+    :return style: A string that can be directly assigned as a button-style in PyQt5 apps.
+    """
+    style = f"""
+    QPushButton {{
+        font-size: {font_size}px;
+        font-weight: bold;
+        padding: {padding}px;
+        color: {color};
+        background-color: {bck_col};  /* Light green color */
+        border-radius: {radius}px;
+    }}
+    QPushButton:hover {{
+        background-color: {bck_col_hov};  /* Slightly darker green on hover */
+    }}
+    QPushButton:pressed {{
+        background-color: {bck_col_clicked};  /* Even darker when pressed */
+    }}
+    """
+    return style

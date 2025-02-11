@@ -1,11 +1,22 @@
-import os
-import sys
+"""
+Helpers functions to support CellScanner main tasks.
+"""
+
+import os, sys
 from datetime import datetime
 from dataclasses import dataclass
 from typing import Optional
 import numpy as np
 import pandas as pd
 from .illustrations import gating_plot
+
+@dataclass
+class Stain:
+    channel: str
+    sign: str
+    value: float
+    label: Optional[str] = None
+
 
 def get_app_dir():
     """Get absolute path relative to the executable location."""
@@ -37,29 +48,14 @@ def time_based_dir(prefix, base_path, multiple_cocultures=False):
     return time_dir
 
 
-def button_style(font_size=12, padding=5, color="black", bck_col="#90EE90",
-                 bck_col_hov="#7FCF7F", bck_col_clicked="#72B572", radius=5):
-    style = f"""
-    QPushButton {{
-        font-size: {font_size}px;
-        font-weight: bold;
-        padding: {padding}px;
-        color: {color};
-        background-color: {bck_col};  /* Light green color */
-        border-radius: {radius}px;
-    }}
-    QPushButton:hover {{
-        background-color: {bck_col_hov};  /* Slightly darker green on hover */
-    }}
-    QPushButton:pressed {{
-        background-color: {bck_col_clicked};  /* Even darker when pressed */
-    }}
-    """
-    return style
-
-
 def load_model_from_files(trained_model_dir):
+    """
+    Loads a previously trained model from CellScanner.
 
+    :param trained_model_dir: Path to the directory with the previously trained model files. Under trained_model_dir,
+                                the user needs to make sure there are all three following files: "trained_model.keras", "scaler.pkl", "label_encoder.pkl"
+    :raises ValueError: If any of the 3 required files is missing.
+    """
     print("Loading model from files")
     from tensorflow.keras.models import load_model
     import joblib
@@ -92,7 +88,7 @@ def get_stains_from_panel(Panel):
     Function to be used only in the GUI framework.
 
     Arguments:
-        PredictionPanel:
+        Panel (:class:`PredictionPanel` | :class:`TrainModelPanel`):
     Returns:
         stain1 (Stain)
         stain2 (Stain)
@@ -134,11 +130,33 @@ def stain_sannity_check(df, label, channel, sign, threshold):
         )
 
 
-def apply_gating(data_df,
-                 stain1=None,
-                 stain2=None,
-                 extra_stains=None
+def apply_gating(data_df: pd.DataFrame,
+                 stain1: Stain = None,
+                 stain2: Stain = None,
+                 extra_stains: dict =None
     ):
+    """
+    Applies line gating to a dataset based on fluorescence or marker intensity thresholds.
+
+    This function evaluates whether the values of specified stains (channels) in the dataset
+    meet their respective thresholds. It assigns labels (True or False) based on the gating
+    criteria.
+
+    Args:
+        data_df (:class:`pandas.DataFrame`): The dataframe containing intensity values for different stains.
+        stain1 (Stain, optional): An instance of the :class:`Stain` class representing the first stain used for gating.
+        stain2 (Stain, optional): An instance of the :class:`Stain` class representing the second stain used for gating.
+        extra_stains (Dict, optional): A dictionary with the label of a stain as key, and its channel, sign, and threshold as their value for multi-channel gating.
+
+    Returns:
+        pandas.DataFrame: A dataframe with the gating results, where each row is labeled as True or False.
+        list: A list of labels assigned to each row based on the applied gating criteria.
+
+    Example:
+        ```
+        gated_df, labels = apply_gating(data, stain1=Stain("CD3", threshold=500), stain2=Stain("CD19", threshold=200))
+        ```
+    """
 
     all_labels = []
 
@@ -223,6 +241,16 @@ def apply_gating(data_df,
 
 def save_gating_results(gated_data_df, output_dir, sample, x_axis, y_axis, z_axis, all_labels):
     """
+    Counts entries in a dataframe for its of the labels in all_labels and exports those in a csv file.
+    It then calls for the :func:`gating_plot` function to export relative visual components.
+
+    :param gated_data_df: A dataframe with a 'predictions' column with the species predicted name label columns (True/False) to count
+    :param output_dir: Path where results will be saved
+    :param sample: Sample name
+    :param x_axis: Name of the X-axis to be plotted (channel among those on the .fcs file)
+    :param y_axis: Name of the X-axis to be plotted (channel among those on the .fcs file)
+    :param z_axis: Name of the X-axis to be plotted (channel among those on the .fcs file)
+    :param all_labels: A list with all the labels for the the stains provided
 
     """
     # Create a directory for gating results
@@ -264,9 +292,3 @@ def save_gating_results(gated_data_df, output_dir, sample, x_axis, y_axis, z_axi
     print("3D scatter plot for gated data saved to:", gated_dir)
 
 
-@dataclass
-class Stain:
-    channel: str
-    sign: str
-    value: float
-    label: Optional[str] = None

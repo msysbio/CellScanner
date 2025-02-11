@@ -2,9 +2,8 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QCom
     QGroupBox, QLabel, QMessageBox, QApplication, QSpinBox
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject
 
-from .helpers import button_style
 from .apply_umap import process_files
-from .GUIhelpers import LabeledComboBox, LabeledSpinBox, LiveDeadDebrisSelectors, GatingMixin, GatingCheckBox
+from .GUIhelpers import LabeledComboBox, LabeledSpinBox, LiveDeadDebrisSelectors, GatingMixin, GatingCheckBox, button_style
 
 """
 TrainingModel.py
@@ -201,7 +200,7 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
 
     def start_training_process(self):
         """
-        Establihes a thread and a worker to execute the run_process_files().
+        Establihes a thread and a worker to execute the :func:`run_process_files`.
         The signals of the worker allows not to exit the app in case of error
         and to return a success message when complete.
         """
@@ -254,7 +253,7 @@ class WorkerProcessFiles(QObject):
     """
     Worker class for processing files in a separate thread.
 
-    This worker is responsible for running `process_files()` without freezing the main UI.
+    This worker is responsible for running :func:`process_files` without freezing the main UI.
     It emits signals to indicate success or failure, allowing the main UI to handle errors properly.
     """
     finished_signal = pyqtSignal()  # Define a signal for completion
@@ -270,7 +269,6 @@ class WorkerProcessFiles(QObject):
             self.TrainModelPanel = process_files(self.TrainModelPanel)
             self.finished_signal.emit()  # Emit the finished signal when done
         except Exception as e:
-            print("fuck this")
             self.error_signal.emit(f"Error during prediction: {str(e)}")
             self.TrainModelPanel.thread.quit()
 

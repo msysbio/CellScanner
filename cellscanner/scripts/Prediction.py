@@ -22,13 +22,11 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject
 
 import os
-import fcsparser
-import numpy as np
 
-from .helpers import button_style, time_based_dir
+from .helpers import time_based_dir
 from .run_prediction import predict, merge_prediction_results
 from .GUIhelpers import (
-    AxisSelector, LiveDeadDebrisSelectors, GatingMixin, GatingCheckBox, GuiMessages,
+    button_style, _GuiMessages, AxisSelector, LiveDeadDebrisSelectors, GatingMixin, GatingCheckBox,
     iterate_stains, load_fcs_file
 )
 
@@ -61,7 +59,7 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
         self.predict_panel_layout.addWidget(self.choose_coculture_file_button)
 
         # Add a text label for selecting the x, y, z axes
-        self.axis_selection_label = QLabel(GuiMessages.AXIS_SELECTION, self)
+        self.axis_selection_label = QLabel(_GuiMessages.AXIS_SELECTION, self)
         self.predict_panel_layout.addWidget(self.axis_selection_label)
 
         # X,Y,Z axis
@@ -80,7 +78,7 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
         ]
 
         # Add a checkbox to apply uncertainty filtering
-        self.uncertainty_filtering_checkbox = QCheckBox(GuiMessages.UNCERTAINTY_CHECKBOX, self)
+        self.uncertainty_filtering_checkbox = QCheckBox(_GuiMessages.UNCERTAINTY_CHECKBOX, self)
         self.uncertainty_filtering_checkbox.stateChanged.connect(self.toggle_uncertainty_filterint_options)
         self.predict_panel_layout.addWidget(self.uncertainty_filtering_checkbox)
 
@@ -90,7 +88,7 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
         self.uncertainty_threshold_layout.addWidget(self.uncertainty_threshold_label)
 
         self.uncertainty_threshold = QDoubleSpinBox(self)
-        self.uncertainty_threshold.setToolTip(GuiMessages.UNCERTAINTY_TOOLTIP)
+        self.uncertainty_threshold.setToolTip(_GuiMessages.UNCERTAINTY_TOOLTIP)
         self.uncertainty_threshold.setRange(-1.0, 10.0)
         self.uncertainty_threshold.setSingleStep(0.01)
         self.update_uncertainty_threshold()
@@ -154,6 +152,9 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
             self.stop_loading_cursor()
 
     def choose_coculture_file(self):
+        """
+        Facilitates the selection of coculture files and populates axis selection dropdowns with appropriate channels.
+        """
         select_coculture_message = ["Select Coculture File", "", "Flow Cytometry Files (*.fcs);;All Files (*)"]
         coculture_filepath, _ = QFileDialog.getOpenFileNames(self, *select_coculture_message)
         if coculture_filepath:
@@ -168,7 +169,7 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
                 # Check if all files share the same numeric column names
                 all_same = all(value.equals(list(sample_numeric_columns.values())[0]) for value in sample_numeric_columns.values())
                 if not all_same:
-                    self.on_error(GuiMessages.COLUMN_NAMES_ERROR)
+                    self.on_error(_GuiMessages.COLUMN_NAMES_ERROR)
 
                 # Populate the combo boxes with the numeric column names
                 self.numeric_colums_set = set(numeric_columns)
@@ -238,7 +239,7 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
         stain_layout = QHBoxLayout()
         stain_description = QLabel("Staining cells:", self)
         stain_combo = QComboBox(self)
-        stain_combo.setToolTip(GuiMessages.USER_STAIN_TOOLTIP)
+        stain_combo.setToolTip(_GuiMessages.USER_STAIN_TOOLTIP)
         stain_relation = QComboBox(self)
         stain_relation.addItems(['>', '<'])
         stain_threshold = QDoubleSpinBox(self)  # QLineEdit(self)

@@ -1,9 +1,16 @@
+"""
+CellScanner Command Line Interface main class.
+
+Besides using CellScanner throught its GUI, you may use it through a CLI.
+To this end, you should first complete a [`config.yml`](../config.yml) file, providing the necessary parameters.
+"""
 import os
 import sys
 import yaml
 import argparse
 import fcsparser
 from collections import defaultdict
+
 # Load CellScanner features
 from scripts.apply_umap import process_files
 from scripts.nn import prepare_for_training, train_neural_network
@@ -97,7 +104,9 @@ class CellScannerCLI():
             self._channel_sannity_check()
 
     def _channel_sannity_check(self):
-
+        """
+        Checks whether a channel provided by the user is actually amont those on the .fcs files.
+        """
         basic_stains = [self.stain1_train, self.stain2_train, self.stain1_predict, self.stain2_predict]
         print(self.blank_files)
         _, data_df = fcsparser.parse(list(self.blank_files)[0], reformat_meta=True)
@@ -114,6 +123,9 @@ class CellScannerCLI():
         print("Valid channel names.")
 
     def train_model(self):
+        """
+        A wrapper for the main training model - related CellScanner functions.
+        """
         print("\nAbout to preprocess input files.")
         cleaned_data = process_files(
             n_events = self.events, umap_n_neighbors=self.n_neighbors,
@@ -144,7 +156,11 @@ class CellScannerCLI():
         print("Model complete!")
 
     def predict_coculture(self):
-
+        """
+        A wrapper for the running prediction step - related CellScanner functions.
+        In case where several co-culture files have been provided (samples), CellScanner makes its prediction per sample
+        and in the end merges them in a single file.
+        """
         print("About to start predicting co-culture profiles.")
 
         if not all([self.model, self.scaler, self.le]):
@@ -191,7 +207,6 @@ class CellScannerCLI():
                 "filter_out_uncertain": self.filter_out_uncertain,
                 "uncertainty_threshold": self.uncertainty_threshold
             }
-
             # Add specific parameters based on gating
             if self.gating:
                 predict_params.update({
@@ -212,9 +227,11 @@ class CellScannerCLI():
             merge_prediction_results(self.predict_dir, "uncertainty")
 
 
-def load_yaml(yaml_file):
+def load_yaml(yaml_file: str):
     """
     Load a yaml file
+
+    :param yaml_file: path to the YAML file
     """
     with open(yaml_file, 'r') as f:
         try:
@@ -225,18 +242,15 @@ def load_yaml(yaml_file):
             sys.exit(1)
 
 
-def parse_dicts(dir_list, entity, names=None):
+def parse_dicts(dir_list: [dict], entity: str, names: str=None):
     """
-   Processes a list of directory info to extract file paths and optionally map them to names.
+    Processes a list of directory info to extract file paths and optionally map them to names.
 
     Parameters:
     -----------
-    dir_list : list of dicts
-        List containing directory info, each with 'path' and 'filenames'.
-    entity : str
-        The entity being processed (e.g., "species_files").
-    names : str, optional
-        The key to map filenames to names (labels). If omitted, only file paths are returned.
+    dir_list : List containing directory info, each with 'path' and 'filenames'.
+    entity : The entity being processed (e.g., "species_files").
+    names : The key to map filenames to names (labels). If omitted, only file paths are returned.
 
     Returns:
     --------

@@ -1,3 +1,10 @@
+"""
+Line gating, if asked, is applied to remove entries corresponding to dead and/or debris cells.
+Remaining entries from all .fcs files are combined.
+UMAP is then applied to reduce dimensionality of the data.
+Nearest Neighbors are calculated and a filtering step is applied where only entries whose neighbours have the same label
+are kept for the training of the Neural Network step.
+"""
 import os
 import umap
 import fcsparser
@@ -8,21 +15,25 @@ from sklearn.neighbors import NearestNeighbors
 from .nn import prepare_for_training
 from .helpers import Stain, get_stains_from_panel, apply_gating
 from .illustrations import umap_plot
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .TrainingModel import TrainModelPanel  # Import only for static type checkers
 
 
-def process_file(file, species_name, n_events, stain_1, stain_2, model_dir):          #  , scaling_constant=150
+def process_file(file: str, species_name: str, n_events: int, stain_1: Stain, stain_2: Stain, model_dir: str) -> pd.DataFrame:
     """
     Processes import .fcs files by first gating (if asked) and then sampling their entries
     to only keep a subset of them for the training step.
 
-    :param file (str): Path to the .fcs file
-    :param species_name (str): Name of the species corresponding to the .fcs file
-    :param n_events (int): Number of entries of the .fcs file to keep for model training
-    :param stain_1 (Strain): User parameters for the (live/dead) staining
-    :param stain_2 (Stain): User parammeters for the (cells/debris) staining
-    :param model_dir (str): Path for model-related output files to be saved
+    :param file: Path to the .fcs file
+    :param species_name: Name of the species corresponding to the .fcs file
+    :param n_events: Number of entries of the .fcs file to keep for model training
+    :param stain_1: User parameters for the (live/dead) staining
+    :param stain_2: User parammeters for the (cells/debris) staining
+    :param model_dir: Path for model-related output files to be saved
 
-    :return sampled_df: The gated (if asked) and sampled entris of the .fcs file to be used for the model training
+    :return: The gated (if asked) and sampled entries of the .fcs file to be used for the model training
     """
     _, df = fcsparser.parse(file, reformat_meta=True)
     if 'Time' in df.columns:
@@ -67,9 +78,19 @@ def process_file(file, species_name, n_events, stain_1, stain_2, model_dir):    
     return sampled_df
 
 
-def process_files(TrainPanel=None, **kwargs):
+def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
     """
-    Main function for UMAP application.
+    This function behaves differently depending on how it is called:
+    - When used from the GUI, it receives an instance of :class:`TrainPanel`.
+    - When used from the CLI, it receives a set of keyword arguments provided through the config.yml file.
+
+    The function applies process_file(), in both blank and monoculture .fcs files.
+    It then merges the filtered entries in a single df which transforms using the StandardScaler() to apply UMAP.
+
+    :param TrainPanel: An instance of the :class:`TrainPanel` when called from the GUI.
+    :param kwargs: User parameter settings as keyword arguments when called from the CLI.
+
+    :return: In case of the CLI, the filtered entries are returned (``cleaned_df``).
     """
     gui = False
     if type(TrainPanel).__name__ == "TrainModelPanel":
@@ -116,6 +137,11 @@ def process_files(TrainPanel=None, **kwargs):
     model_dir = os.path.join(working_directory, "model")
     os.makedirs(model_dir, exist_ok=True)
 
+    # Build a map between the species name and their index on the key list
+    label_map = {species_name: idx for idx, species_name in enumerate(species_files_names_dict.keys())}
+    # Add Blanks as the last ones
+    label_map['Blank'] = len(label_map)
+
     # Process files for all species dynamically
     all_species_dataframes = []
     for species_name, species_files in species_files_names_dict.items():
@@ -151,33 +177,28 @@ def process_files(TrainPanel=None, **kwargs):
 
     # Combine data
     combined_df = pd.concat([df for species_dataframes in all_species_dataframes for df in species_dataframes] + blank_dataframes)
-
-
-    columns_to_plot = combined_df.columns.difference(['Species']).tolist()
+    columns_to_plot = combined_df.columns.difference(['Species']).tolist()  # All column names except of those in the list
     data_subset = combined_df[columns_to_plot].values
+
+    # -----------------------------------------------
+    # Implement dimensionality reduction using UMAP
+    # -----------------------------------------------
+
+    # Scale: (x - u) / s
     scaled_data_subset = StandardScaler().fit_transform(data_subset)
 
-    # Dimensionality reduction using UMAP
-    print("Build UMAP reducer")
+    # Init a reducer based on user's settings
     reducer = umap.UMAP(
         n_components=3,
         n_neighbors=umap_n_neighbors,
         min_dist=umap_min_dist
     )
 
-    # Fit and transform the data
+    # Run UMAP: Fit and transform the data
     embedding = reducer.fit_transform(scaled_data_subset)
 
-    label_map = {species_name: idx for idx, species_name in enumerate(species_files_names_dict.keys())}
-    label_map['Blank'] = len(label_map)
+    #
     mapped_labels = combined_df['Species'].map(label_map).values
-
-    # Plot UMAP before filtering
-    umap_plot(combined_df, embedding, model_dir, "Before", None)
-
-    # -----------------------
-    # Call nn basic class
-    # -----------------------
 
     # Nearest Neighbors filtering
     print("Instantiate the Nearest Neighbors Model")
@@ -188,24 +209,33 @@ def process_files(TrainPanel=None, **kwargs):
 
     print("Find Nearest Neighbors")
     _, indices = nn.kneighbors(embedding)
-    indices_to_keep = []
 
+    # Entries are parsed and indices of those that the one of the following cases applies are kept:
+    # If the point is NOT "Blank", keeps it only if enough neighbors have the same label (nonblank_threshold).
+    # If the point IS "Blank", keeps it only if enough neighbors are also "Blank" (blank_threshold).
+    indices_to_keep = []
     for i in range(len(embedding)):
         neighbor_labels = mapped_labels[indices[i][1:]] if len(indices[i]) > 1 else []
         if mapped_labels[i] != label_map['Blank']:
-            non_blank_neighbors = np.sum(neighbor_labels == mapped_labels[i])
-            if non_blank_neighbors >= nonblank_threshold:
+            nonblank_neighbors = np.sum(neighbor_labels == mapped_labels[i])
+            if nonblank_neighbors >= nonblank_threshold:
                 indices_to_keep.append(i)
         else:
             blank_neighbors = np.sum(neighbor_labels == label_map['Blank'])
             if blank_neighbors >= blank_threshold:
                 indices_to_keep.append(i)
 
+    # Only entries kept after NN filtering are kept to be used for the training of the NN model
     cleaned_data = combined_df.iloc[indices_to_keep]
+
+    # Plot UMAP before filtering
+    umap_plot(combined_df, embedding, model_dir, "Before", None)
 
     # Plot UMAP after filtering
     umap_plot(cleaned_data, embedding, model_dir, "After", indices_to_keep)
     print("Data processing and UMAP filtering successful.")
+
+    # Exit function based on interface
     if gui:
         TrainPanel.cleaned_data = cleaned_data
         prepare_for_training(TrainPanel)

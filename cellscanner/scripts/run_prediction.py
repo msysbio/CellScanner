@@ -14,7 +14,8 @@ from .illustrations import species_plot, uncertainty_plot, heterogeneity_pie_cha
 # Main function to be called from the worker
 def predict(PredictionPanel=None, **kwargs):
     """
-    Runs
+    Executes the prediction workflow, including loading models,
+    predicting species, applying gating, performing heterogeneity analysis, and generating visualizations.
 
     :param PredictionPanel:
     :param kwargs:
@@ -22,9 +23,6 @@ def predict(PredictionPanel=None, **kwargs):
     gui = False
 
     if type(PredictionPanel).__name__ == "PredictionPanel":
-
-
-        print(PredictionPanel.__dict__)
 
         # Attempt to retrieve components from file_panel first
         model, scaler, label_encoder, scaling_constant = get_model_components(PredictionPanel.file_panel)
@@ -227,6 +225,11 @@ def save_prediction_results(
     prediction_counts.to_csv(outfile_prediction_counts)
     print("Prediction counts saved to:", outfile_prediction_counts)
 
+
+    print("\n\n>>uncertainty_threshold")
+    print(uncertainty_threshold)
+
+
     # Calculate and save uncertainty counts by species
     if filter_out_uncertain:
         outfile_uncertainties = create_file_path(output_dir, sample, 'uncertainty_counts', 'csv')
@@ -282,21 +285,12 @@ def run_heterogeneity(df, species_list, output_dir, sample):
     hetero_df.drop('uncertainties', axis=1, inplace=True)
     hetero_df['predictions'] = df['predictions']
 
-    print("\n\n>>>>>>>>>>>>>>>>>>>>>>>>>>")
-    print(hetero_df.columns)
-    print(">>>>>>>>>>>>>>>>>>>>>>>>>>\n\n")
-
     # Compute heterogeneity measures for the sample
     try:
         hetero1 = hetero_simple(hetero_df.iloc[:, :-1])
         hetero2 = hetero_mini_batch(hetero_df.iloc[:, :-1])
     except ValueError as e:
         raise ValueError("Error calculating heterogeneity.") from e
-
-    # Create and save heterogeneity plots
-    save_heterogeneity_plots(hetero1, hetero2, heterogeneity_dir, sample)
-    res_file = "_".join([sample, "heterogeneity_results.csv"])
-    hetero_res_file = os.path.join(heterogeneity_dir, res_file)
 
     # Compute heterogeneity metrics for each species
     hetero_results_list = []
@@ -325,6 +319,8 @@ def run_heterogeneity(df, species_list, output_dir, sample):
     hetero_results_df = pd.DataFrame(hetero_results_list)
 
     # Save the DataFrame to a CSV file
+    res_file = "_".join([sample, "heterogeneity_results.csv"])
+    hetero_res_file = os.path.join(heterogeneity_dir, res_file)
     hetero_results_df.to_csv(hetero_res_file, sep="\t", index=False)
 
 
@@ -393,7 +389,7 @@ def merge_prediction_results(output_dir, prediction_type):
     Merge prediction and uncertainty output files into a single file for each case when multiple coculture files are provided.
 
     :param output_dir: Output directory where CellScanner prediction files were saved
-    :param prediction_type: TYpe of CellScanner output file; `prediction` (counts) or `uncertainty` (heretogeneity)
+    :param prediction_type: Type of CellScanner output file; 'prediction' (counts) or 'uncertainty' (heretogeneity)
     """
     if prediction_type not in ["prediction", "uncertainty"]:
         raise ValueError(f"Please provide a valide prediction_type: 'prediction|uncertainty'")
