@@ -205,7 +205,7 @@ z_axis:
   type: str
 
 filter_out_uncertain:
-  value: false
+  value: true
   threshold: 0.5
   required: false
   default: false
@@ -225,13 +225,6 @@ filter_out_uncertain:
 # ---------------------
 # Gating parameters
 # ---------------------
-gating:
-  value: true
-  required: false
-  default: false
-  description: >
-    Set whether you wish data to be gated or not.
-  type: bool
 
 #   -------------------------      For all stains     -------------------------
 #
@@ -257,10 +250,18 @@ gating:
 #     label:
 #
 
+gating:
+  value: true
+  required: false
+  default: false
+  description: >
+    Set whether you wish data to be gated or not.
+  type: bool
+
 stain1_train:
-  channel: PerCP-H
-  sign: greater_than
-  value: 500000
+  channel:
+  sign:
+  value:
   description: >
     This stain specifically describes total cells; 
     all events where the threshold is met will be classified as `cells`. The rest of the events will be classified as `debris`.
@@ -268,9 +269,9 @@ stain1_train:
   type: Stain
 
 stain2_train:
-  channel: FITC-A
-  sign: greater_than
-  value: 2000000
+  channel:
+  sign:
+  value:
   required: false
   sign_values:
     - greater_than
@@ -281,7 +282,7 @@ stain2_train:
   type: Stain
 
 stain1_predict:
-  channel: PerCP-H
+  channel: FITC-A
   sign: greater_than
   value: 500000
   required: false
@@ -291,7 +292,7 @@ stain1_predict:
   type: Stain
 
 stain2_predict:
-  channel: FITC-A
+  channel: PerCP-H
   sign: greater_than
   value: 2000000
   required: false
