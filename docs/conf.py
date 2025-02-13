@@ -21,6 +21,8 @@ sys.path.insert(0, os.path.abspath('./extensions'))
 
 # Add any Sphinx extension module names here, as strings.
 # They can be extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
+# IMPORTANT NOTE: The order you give the extensions in the extensions list MATTERS!
+# e.g. https://github.com/sphinx-doc/sphinx/issues/4221
 extensions = [
 
     # To link to pyqt5 docs
