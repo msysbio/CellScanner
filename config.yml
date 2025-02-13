@@ -281,7 +281,7 @@ stain2_train:
     Any event meeting the threshold will be classified as `dead`.
   type: Stain
 
-# DNA stain: cells - debris  ("$LABEL_debris";) FITC-A
+# DNA stain: cells - debris  ("$LABEL_debris";)  SYBR Green --  FITC-A
 stain1_predict:
   channel: FITC-A
   sign: greater_than
@@ -292,7 +292,7 @@ stain1_predict:
     All events meeting the threshold will be classified as `cell`. The rest of the events will be classified as `debris`.
   type: Stain
 
-# Dead/live stain: dead - live ("$LABEL_dead")  - PerCP-H
+# Dead/live stain: dead - live ("$LABEL_dead")  PI -- PerCP-H
 stain2_predict:
   channel: PerCP-H
   sign: greater_than

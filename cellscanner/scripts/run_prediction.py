@@ -2,7 +2,7 @@ import os
 import math
 import numpy as np
 import pandas as pd
-from typing import List
+from scipy.stats import entropy
 
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics import pairwise_distances
@@ -262,11 +262,11 @@ def save_prediction_results(
         df = df[df["predictions"] != "Unknown"]
         species_names.remove("Unknown")
 
-    # If both basic stains there, cell is higher
+    # If both basic stains there, cell/debris precedes
     if {"cell", "dead"}.issubset(df.columns):
 
         for species in species_names:
-
+            # NOTE: If cell column is False, thus threshold holds, entry is a debris
             sp_debris = df[(df['predictions'] == species) & (df["cell"] == False)]
             counts_df.loc["_".join([species, "debris"])] = {"count": sp_debris.shape[0]}
 
@@ -274,6 +274,7 @@ def save_prediction_results(
             df = df[~df.index.isin(sp_debris.index)]
 
             # Count how many dead/live from the remaining
+            # NOTE: If dead column is True then, thus threshold holds, the entry is a dead entry
             sp_dead = df[df['predictions'] == species]["dead"].value_counts()
             counts_df.loc["_".join([species, "live"])] = sp_dead.get(False, None) if False in sp_dead else print(f"Species: {species} has no live entries")
             counts_df.loc["_".join([species, "dead"])] = sp_dead.get(True, None) if True in sp_dead else print(f"Species: {species} has no dead entries")

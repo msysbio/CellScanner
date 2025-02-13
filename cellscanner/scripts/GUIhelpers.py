@@ -47,7 +47,7 @@ class StainSelector(QWidget):
 
         self.threshold = QLineEdit(self)
         self.threshold.setPlaceholderText(
-            "Enter threshold. All events where the threshold is met will be classified as {label}."
+            f"Enter threshold. All events where the threshold is met will be classified as {label}."
         )
 
         layout.addWidget(self.label)
@@ -250,21 +250,11 @@ class LiveDeadDebrisSelectors:
     """
     def basic_stains(self):
 
-        # Stain 1 selection (for live/dead)
-        tooltip_for_stain_1 = (
-            "Select the channel that will be used for gating live/dead cells. "
-            "All events where the threshold is met will be classified as dead."
-        )
-        # Stain 2 selection (for debris, optional)
-        tooltip_for_stain_2 = (
-            "Select the channel that will be used for gating all cells. "
-            "All events where the threshold is met will be classified as cells. "
-            "The rest of the events will be classified as debris."
-        )
+
 
         # Pair of basic stains
-        self.stain1_selector = StainSelector("Staining inactive cells (e.g. PI):", tooltip_for_stain_1, "dead", self)
-        self.stain2_selector = StainSelector("Staining all cells (e.g. SYBR/DAPI):", tooltip_for_stain_2, "cell", self)
+        self.stain1_selector = StainSelector("Staining all cells (e.g. SYBR/DAPI):", _GuiMessages.TP_STAIN_1, "cell", self)
+        self.stain2_selector = StainSelector("Staining inactive (dead) cells (e.g. PI):", _GuiMessages.TP_STAIN_2, "dead", self)
 
         try:
             self.predict_panel_layout.addWidget(self.stain1_selector)
@@ -301,16 +291,15 @@ class _GuiMessages:
 
     AXIS_SELECTION = "Choose the Channels that will be used as x, y, z axis for the 3D plot:"
 
-
     GATING_CHECHBOX = (
         "When staining for both inactive and total cells, CellScanner will also return"
         "the living cells, by combining findings from these 2 stains."
     )
+
     GATING_THRESHOLD = (
         "Important: Some visualization software may transform raw data."
         "Ensure you set the threshold based on the raw data, not post-transformation."
     )
-
 
     COLUMN_NAMES_ERROR = (
         "Column names on your coculture files differ. Please make sure you only include files sharing the same column names."
@@ -330,6 +319,21 @@ class _GuiMessages:
     OUTPUT_DIR = (
         "Optional. Provide output directory where intermediate files and predictions will be saved."
     )
+
+    # Stain 1 selection (for debris, optional) sybr-green
+    TP_STAIN_1 = (
+        "Select the channel that will be used for gating all cells. "
+        "All events where the threshold is met will be classified as cells. "
+        "The rest of the events will be classified as debris."
+    )
+    # Stain 2 selection (for live/dead)
+    TP_STAIN_2 = (
+        "Select the channel that will be used for gating live/dead cells. "
+        "All events where the threshold is met will be classified as dead."
+        "The rest of the events will be classified as live."
+    )
+
+
 
 
 def load_fcs_file(fcss):

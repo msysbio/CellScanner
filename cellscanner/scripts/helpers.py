@@ -171,7 +171,7 @@ def apply_gating(data_df: pd.DataFrame,
         gated_data_df['predictions'] = predictions_column
 
     if stain1 is not None:
-        """ STAIN FOR CELLS / DEBRIS """
+        """ STAIN FOR CELLS / DEBRIS (sybr green) """
         if stain1.channel is not None and stain1.channel != "Not applicable":
 
             # Initialize the 'state' column with 'not dead'
@@ -189,7 +189,7 @@ def apply_gating(data_df: pd.DataFrame,
                 raise ValueError(f"Gating failed for stain1: {e}") from e  # Preserve original traceback
 
     if stain2 is not None:
-        """ STAIN FOR LIVE / DEAD """
+        """ STAIN FOR LIVE / DEAD (PI) """
         if stain2.channel is not None and stain2.channel != "Not applicable":
 
             # Initialize the 'state' column with 'not dead'
