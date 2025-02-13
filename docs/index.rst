@@ -38,3 +38,4 @@ CellScanner
 .. toctree::
    :maxdepth: 3
    :caption: Developer Guide
+

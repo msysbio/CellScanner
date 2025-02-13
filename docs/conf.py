@@ -1,21 +1,14 @@
-
 # Configuration file for the Sphinx documentation builder.
-#
-# This file only contains a selection of the most common options. For a full
-# list see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 # -- Path setup --------------------------------------------------------------
 
 import os
 import sys
-sys.path.insert(0, os.path.abspath('./extensions'))
 
 # -- Project information -----------------------------------------------------
-
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "μGrowthDB"
+project = "CellScanner"
 organization = "Lab of Microbial Systems Biology"
 author = f"{organization} & Contributors"
 copyright = f"2025, {author}"
@@ -24,10 +17,24 @@ release = version
 
 # -- General configuration ---------------------------------------------------
 
-# Add any Sphinx extension module names here, as strings. They can be
-# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
-# ones.
+sys.path.insert(0, os.path.abspath('./extensions'))
+
+# Add any Sphinx extension module names here, as strings.
+# They can be extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = [
+
+    # To link to pyqt5 docs
+    "sphinx.ext.autodoc",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.mathjax",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.autosummary",
+    "sphinx_qt_documentation",
+
+    "nbsphinx",
+    "autoapi.extension",
+    "sphinx_search.extension",
 
     # For using CONTRIBUTING.md.
     "myst_parser",
@@ -39,38 +46,31 @@ extensions = [
     "tags",
     "links",
     "hacks",
-    "notfound.extension",
+    # "notfound.extension",    ## not in the bac_Growt
 
-    # These extensions require RTDs to work so they will not work locally.
-    "sphinx_search.extension",
-    "autoapi.extension",
-
-    # To link to pyqt5 docs
-    "sphinx_qt_documentation",
-    "sphinx.ext.autodoc",
-    "sphinx.ext.intersphinx",
-    "sphinx.ext.autosummary",
-    "sphinx.ext.viewcode",
-    "sphinx.ext.napoleon",
 ]
+
 
 # -- Options for autoapi -------------------------------------------------------
-autoapi_type = "python"
 autoapi_dirs = ["../cellscanner"]
+autoapi_ignore = []
 
-# List of patterns, relative to source directory, that match files and
-# directories to ignore when looking for source files.
-# This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = [
-    '_build',
-    'Thumbs.db',
-    '.DS_Store',
-    ".env",
-    "extensions",
-    "**/includes",
-    "README.md",
-    "design-tabs.js", # We are using inline-tabs and this throws errors/warnings
+# NOTE: The autoapi_options and the functions autoapi_skip_member() and setup()
+# make sure class attributes are not shown on the API
+autoapi_options = [
+    "members",
+    "undoc-members",
+    "show-inheritance",
 ]
+
+def autoapi_skip_member(app, what, name, obj, skip, options):
+    # Skip all attributes globally
+    if what == "attribute":
+        return True
+    return None
+
+def setup(app):
+    app.connect("autoapi-skip-member", autoapi_skip_member)
 
 # Enable typehints
 autodoc_typehints = "signature"
@@ -83,28 +83,13 @@ master_doc = "index"
 
 pygments_style = "sphinx"
 
-
-# Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
-
-
-# -- Features ----------------------------------------------------------------
-
-# Auto numbering of figures
-numfig = True
-
 # -- Options for HTML output -------------------------------------------------
 
-# The theme to use for HTML and HTML Help pages.  See the documentation for
-# a list of builtin themes.
-# https://github.com/pradyunsg/furo
-# https://pradyunsg.me/furo/
 html_theme = 'furo'
 html_title = "CellScanner"
 html_short_title = "CellScanner"
 html_logo = '_static/logo.png'
 html_favicon = '_static/favicon.ico'
-
 html_theme_options = {
     "light_logo": 'logo.png',  # "crest-oceanrender-logo.svg",
     "dark_logo": 'logo-dark.png',  # "crest-oceanrender-logo-dark.svg",
@@ -138,27 +123,30 @@ html_js_files = [
 html_output_encoding = "utf-8"
 
 
+# -- Features ----------------------------------------------------------------
+
+# Auto numbering of figures
+numfig = True
+
+issues_github_path = "hariszaf/cellscanner"
+
 mathjax_path = (
     "https://cdn.mathjax.org/mathjax/latest/"
     "MathJax.js?config=TeX-AMS-MML_HTMLorMML"
 )
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
-# -- Options for PDF output --------------------------------------------------
 
-# Customise PDF here. maketitle overrides the cover page.
-latex_elements = {
-    # "maketitle": "\\input{your_cover.tex}"
-    # "maketitle": "\\sphinxmaketitle",
-}
+# Add any paths that contain templates here, relative to this directory.
+templates_path = ['_templates']
 
-# latex_logo = "../logo/crest-oceanrender-logomark512.png"
-latex_logo = "_static/logo.png"
+
+# myst_enable_extensions = ["colon_fence"]
 
 # -- Templating --------------------------------------------------------------
 
 # The default role will be used for `` so we do not need to do :get:``.
 default_role = "get"
-
 
 # -- Options for markdown -------------------------------------------------------
 
@@ -175,4 +163,7 @@ intersphinx_mapping = {
     "Numpy": ("https://docs.scipy.org/doc/numpy/", None),
     "pandas": ("https://pandas.pydata.org/pandas-docs/stable/", None),
     "packaging": ("https://packaging.pypa.io/en/latest/", None),
+        # from here: https://github.com/GPflow/tensorflow-intersphinx/
+    "tensorflow": ("https://www.tensorflow.org/api_docs/python", "https://github.com/GPflow/tensorflow-intersphinx/raw/master/tf2_py_objects.inv"),
+    'sklearn': ('http://scikit-learn.org/stable', None)
 }
