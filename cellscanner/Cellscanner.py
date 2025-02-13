@@ -57,12 +57,9 @@ class NeuralNetworkGUI(QMainWindow):
     """
     Main class of the CellScanner GUI.
     It builds a PyQT app with 3 main panels:
-    - Importing files (:class:`ImportFilePanel`)
-    - Training (:class:`TrainModelPanel`)
-    - Prediction (:class:`PredictionPanel`)
-
-    NOTE: The Training panel is delivered thanks to the TrainModelPanel class of the TrainingModel.py
-    The Importing files and the Predictions panels though, they are described as features of the NeuralNetworkGUI class.
+    - Importing files (:class:`scripts.ImportFiles.ImportFilePanel`)
+    - Training (:class:`scripts.TrainingModel.TrainModelPanel`)
+    - Prediction (:class:`scripts.Prediction.PredictionPanel`)
     """
     def __init__(self):
         super().__init__()

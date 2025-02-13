@@ -79,7 +79,7 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
 
         # Add a checkbox to apply uncertainty filtering
         self.uncertainty_filtering_checkbox = QCheckBox(_GuiMessages.UNCERTAINTY_CHECKBOX, self)
-        self.uncertainty_filtering_checkbox.stateChanged.connect(self.toggle_uncertainty_filterint_options)
+        self.uncertainty_filtering_checkbox.stateChanged.connect(self._toggle_uncertainty_filterint_options)
         self.predict_panel_layout.addWidget(self.uncertainty_filtering_checkbox)
 
         # Scaling constant for uncertainty filtering
@@ -91,7 +91,7 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
         self.uncertainty_threshold.setToolTip(_GuiMessages.UNCERTAINTY_TOOLTIP)
         self.uncertainty_threshold.setRange(-1.0, 10.0)
         self.uncertainty_threshold.setSingleStep(0.01)
-        self.update_uncertainty_threshold()
+        self._update_uncertainty_threshold()
         self.uncertainty_threshold_layout.addWidget(self.uncertainty_threshold)
 
         self.predict_panel_layout.addLayout(self.uncertainty_threshold_layout)
@@ -111,7 +111,7 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
 
         # Hide gating and uncertainty filtering options initially
         self.toggle_gating_options()  # NOTE: from the GatingMixin mixin class, passed in the base classes of the PredictionPanel
-        self.toggle_uncertainty_filterint_options()
+        self._toggle_uncertainty_filterint_options()
 
         # Add gating layout to the predict one
         self.predict_panel_layout.addLayout(self.gating_layout)  # NOTE: (clarification) the gating_layout is there, thanks to the gating_checkbox mixin class
@@ -124,7 +124,7 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
 
     def fire_predict(self):
         try:
-            self.start_loading_cursor()
+            self._start_loading_cursor()
             self.samples_number = len(self.sample_to_df)
             if self.samples_number == 0:
                 raise ValueError("Coculture data have not been provided.")
@@ -133,12 +133,12 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
             self.thread = QThread()
             self.worker = WorkerPredict(PredictPanel=self)
             self.worker.moveToThread(self.thread)
-            self.worker.error_signal.connect(self.on_error)
+            self.worker.error_signal.connect(self._on_error)
 
             self.thread.started.connect(self.worker.run_predict)
 
             # Apply UMAP & train neural network
-            self.worker.finished_signal.connect(self.prediction_completed)
+            self.worker.finished_signal.connect(self._prediction_completed)
             self.worker.finished_signal.connect(self.thread.quit)
 
             # Ensure the thread finishes properly but does not exit the app
@@ -148,8 +148,8 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
             self.thread.start()
 
         except Exception as e:
-            self.on_error(str(e))
-            self.stop_loading_cursor()
+            self._on_error(str(e))
+            self._stop_loading_cursor()
 
     def choose_coculture_file(self):
         """
@@ -169,7 +169,7 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
                 # Check if all files share the same numeric column names
                 all_same = all(value.equals(list(sample_numeric_columns.values())[0]) for value in sample_numeric_columns.values())
                 if not all_same:
-                    self.on_error(_GuiMessages.COLUMN_NAMES_ERROR)
+                    self._on_error(_GuiMessages.COLUMN_NAMES_ERROR)
 
                 # Populate the combo boxes with the numeric column names
                 self.numeric_colums_set = set(numeric_columns)
@@ -187,14 +187,14 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
                 # Keep dictionary with sample names (key) and their corresponding data_df (value)
                 self.sample_to_df = sample_to_df
             except:
-                self.on_error("Something went off with your coculture files.")
+                self._on_error("Something went off with your coculture files.")
         else:
             print("No coculture file selected.")
             self.choose_coculture_file_button.setText(select_coculture_message[0])
 
-    def on_error(self, message):
+    def _on_error(self, message):
         try:
-            self.stop_loading_cursor()
+            self._stop_loading_cursor()
             QMessageBox.critical(self, "Error", message)
         except Exception as e:
             print(f"Error displaying the message: {e}")
@@ -202,25 +202,25 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
             # Ensure that the thread is not running after error
             self.thread = None
 
-    def start_loading_cursor(self):
+    def _start_loading_cursor(self):
         QApplication.setOverrideCursor(Qt.WaitCursor)
 
-    def stop_loading_cursor(self):
+    def _stop_loading_cursor(self):
         QApplication.restoreOverrideCursor()
 
-    def prediction_completed(self):
-        self.stop_loading_cursor()
+    def _prediction_completed(self):
+        self._stop_loading_cursor()
         QMessageBox.information(self, "Prediction Complete", f"Predictions have been saved in {self.predict_dir}.")
         self.thread = None
 
-    def toggle_uncertainty_filterint_options(self):
+    def _toggle_uncertainty_filterint_options(self):
         is_checked = self.uncertainty_filtering_checkbox.isChecked()
         self.filter_out_uncertain = True
         self.uncertainty_threshold_label.setVisible(is_checked)
         self.uncertainty_threshold.setVisible(is_checked)
-        self.update_uncertainty_threshold()
+        self._update_uncertainty_threshold()
 
-    def update_uncertainty_threshold(self):
+    def _update_uncertainty_threshold(self):
         if self.train_panel.cs_uncertainty_threshold is not None:
             self.uncertainty_threshold.setValue(self.train_panel.cs_uncertainty_threshold)
         else:
