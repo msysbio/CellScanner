@@ -6,9 +6,8 @@ from typing import List
 
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics import pairwise_distances
-from scipy.stats import entropy
 
-from .helpers import create_file_path, get_stains_from_panel, apply_gating, save_gating_results, compute_label_counts
+from .helpers import create_file_path, get_stains_from_panel, apply_gating, save_gating_results
 from .illustrations import species_plot, uncertainty_plot, heterogeneity_pie_chart, heterogeneity_bar_plot, create_color_map
 
 # Main function to be called from the worker
@@ -136,7 +135,7 @@ def predict(PredictionPanel=None, **kwargs):
         )
         # Perform heterogeneity analysis
         hetero_df = gating_df.drop(columns=all_labels)
-
+        data_df_pred = gating_df.copy()
     else:
         hetero_df = data_df_pred.copy()
 
@@ -154,7 +153,6 @@ def predict(PredictionPanel=None, **kwargs):
         scaling_constant=scaling_constant,
         uncertainty_threshold=uncertainty_threshold,
         filter_out_uncertain=filter_out_uncertain,
-        gating_df = gating_df if 'gating_df' in locals() else None,
         all_labels = all_labels if 'all_labels' in locals() else None
     )
 
@@ -163,11 +161,16 @@ def predict(PredictionPanel=None, **kwargs):
 
 
 # Functions to be used by the predict()
-def predict_species(data_df, model, scaler, label_encoder, scaling_constant):
+def predict_species(data_df: pd.DataFrame,
+                    model: "tensorflow.keras.Sequential",
+                    scaler: "sklearn.preprocessing.StandardScaler",
+                    label_encoder: "sklearn.preprocessing.LabelEncoder",
+                    scaling_constant: int
+                    ):
     """
-
     :param data_df:
     :param model:
+    :type model: `keras.models.Sequential` or `Sequential API documentation <https://keras.io/api/models/sequential/>`
     :param scaler:
     :param label_encoder:
     :param scaling_constant:
@@ -203,14 +206,13 @@ def predict_species(data_df, model, scaler, label_encoder, scaling_constant):
 
 
 def save_prediction_results(
-    data_df: pd.DataFrame, species_list: List,
+    data_df: pd.DataFrame, species_list: list,
     output_dir: str,
-    x_axis, y_axis, z_axis,
+    x_axis: str, y_axis: str, z_axis: str,
     sample: str = None,
     scaling_constant: int = 150,
     uncertainty_threshold: float = 0.5,
     filter_out_uncertain: bool = False,
-    gating_df: pd.DataFrame = None,
     all_labels: list = None
     ):
     """
@@ -241,32 +243,78 @@ def save_prediction_results(
         uncertainty_counts.to_csv(outfile_uncertainties)
         print("Uncertainty counts by species saved to:", outfile_uncertainties)
 
-    # Save counts based on whether gating and/or uncertainty filtering has been applied
-    output_data = {}  # output_file: data
-    if filter_out_uncertain and gating_df is not None:
+    # ===============
+    # Build prediction output file
+    # NOTE: Check on PR #28 for output descriptions
+    # ===============
+    df = data_df.copy()
+    counts_df = pd.DataFrame(columns=["count"])      # NOTE: the value_counts() of pd, returns a df with a column called "count"
+    species_names = list(df['predictions'].unique())
 
-        print("Both gating and uncertainty filter..")
-        df = gating_df[gating_df["uncertainties"] < uncertainty_threshold]
-        output_data.update(compute_label_counts(gating_df, all_labels, output_dir, sample))
+    # Uncertainty higher in hierarchy than all
+    if "Unknown" in species_names:
 
-    elif gating_df is not None:
-        print("Only gating..")
-        output_data.update(compute_label_counts(gating_df, all_labels, output_dir, sample))
+        # Add counts to counts_df
+        unknown_df = df[df["predictions"]== "Unknown"]
+        counts_df.loc["Unknown"] = {"count": unknown_df.shape[0]}
 
-    elif filter_out_uncertain:
-        print("Only uncertainty filter..")
-        df = data_df[data_df["uncertainties"] < uncertainty_threshold]
-        all_counts = df['predictions'].value_counts()
-        output_data[outfile_prediction_counts] = all_counts
+        # Remove from gate df
+        df = df[df["predictions"] != "Unknown"]
+        species_names.remove("Unknown")
 
+    # If both basic stains there, cell is higher
+    if {"cell", "dead"}.issubset(df.columns):
+
+        for species in species_names:
+
+            sp_debris = df[(df['predictions'] == species) & (df["cell"] == False)]
+            counts_df.loc["_".join([species, "debris"])] = {"count": sp_debris.shape[0]}
+
+            # Remove species debris from working df
+            df = df[~df.index.isin(sp_debris.index)]
+
+            # Count how many dead/live from the remaining
+            sp_dead = df[df['predictions'] == species]["dead"].value_counts()
+            counts_df.loc["_".join([species, "live"])] = sp_dead.get(False, None) if False in sp_dead else print(f"Species: {species} has no live entries")
+            counts_df.loc["_".join([species, "dead"])] = sp_dead.get(True, None) if True in sp_dead else print(f"Species: {species} has no dead entries")
+
+    elif "cell" in df.columns:
+
+        for species in species_names:
+            sp_debris = df[df['predictions'] == species]["cell"].value_counts()
+            counts_df.loc["_".join([species, "debris"])] = sp_debris.get(False, None) if False in sp_debris else print(f"Species: {species} has no debris entries")
+            counts_df.loc[species] = sp_debris.get(True, None) if True in sp_debris else print(f"Species: {species} has no entries not being debris.")
+
+    elif "dead" in df.columns:
+
+        for species in species_names:
+
+            # Count how many dead/live from the remaining
+            sp_dead = df[df['predictions'] == species]["dead"].value_counts()
+            counts_df.loc["_".join([species, "live"])] = sp_dead.get(False, None) if False in sp_dead else print(f"Species: {species} has no live entries")
+            counts_df.loc["_".join([species, "dead"])] = sp_dead.get(True, None) if True in sp_dead else print(f"Species: {species} has no dead entries")
     else:
-        print("No gating, no uncertainty filter..")
-        all_counts = data_df['predictions'].value_counts()
-        output_data[outfile_prediction_counts] = all_counts
 
-    # Save sample's counts
-    for outfile, df in output_data.items():
-        df.to_csv(outfile)
+        if all_labels is not None:
+            for label in all_labels:
+                for species in species_names:
+                    sp_df = df[df['predictions'] == species][label].value_counts()
+                    counts_df.loc["_".join([species, "not", label])] = (
+                        sp_df.get(False, None)
+                        if False in sp_df
+                        else print(f"Species: {species} has no entries of not being {label}")
+                    )
+                    counts_df.loc["_".join([species, label])] = (
+                        sp_df.get(True, None)
+                        if True in sp_df
+                        else print(f"Species: {species} has no dead entries of {label}")
+                    )
+                    print("ATTENTION! In this case the number of entries is not in line with the entries on the .fcs file")
+        else:
+            print("Basic case where no gating - no stains at all.")
+            counts_df = pd.concat([counts_df, df['predictions'].value_counts()])
+
+    counts_df.to_csv(outfile_prediction_counts)
 
     # ----------------
     # PLOTS
@@ -299,7 +347,7 @@ def save_prediction_results(
         )
 
 
-def run_heterogeneity(df, species_list, output_dir, sample):
+def run_heterogeneity(df: pd.DataFrame, species_list: list, output_dir: str, sample: str):
     """
     Calculate, plot and export to files heterogeneity metrics.
 
@@ -338,15 +386,13 @@ def run_heterogeneity(df, species_list, output_dir, sample):
             hetero1 = hetero_simple(df.iloc[:, :-1])
             hetero2 = hetero_mini_batch(df.iloc[:, :-1], species)
 
-            # # Build heterogeneity plots  --  decided not to plot
-            # save_heterogeneity_plots(hetero1, hetero2, heterogeneity_dir, sample, species)
-
             # Append the result as a dictionary to the list
             hetero_results_list.append({
                 "Species": species,
                 "Simple Heterogeneity": hetero1,
                 "Medoid Heterogeneity": hetero2
             })
+
         except ValueError as e:
             raise ValueError("Error calculating heterogeneity.") from e
 
@@ -359,13 +405,17 @@ def run_heterogeneity(df, species_list, output_dir, sample):
     hetero_results_df.to_csv(hetero_res_file, sep="\t", index=False)
 
 
-def hetero_simple(data):
-    """Calculate simple heterogeneity as the sum of mean ranges across all channels."""
+def hetero_simple(data: pd.DataFrame):
+    """
+    Calculate simple heterogeneity as the sum of mean ranges across all channels.
+
+    :return: numpy.int64
+    """
     ranges = data.apply(np.ptp, axis=0)
     return np.sum(ranges.mean())
 
 
-def hetero_mini_batch(data, species=None, type='av_diss'):
+def hetero_mini_batch(data: pd.DataFrame, species: str=None, type='av_diss'):
     """
     Uses a variant of K-Means clustering that is faster and more memory-efficient asking for a single cluster
     similar to computing the mean (or geometric center) of all points.
@@ -376,7 +426,7 @@ def hetero_mini_batch(data, species=None, type='av_diss'):
     :param data:
     :param species:
     :param type:
-    :return result: Maximum distance between the centroid and data points
+    :return result: numpy.float64 - Maximum distance between the centroid and data points
     """
     # Use MiniBatchKMeans as an alternative
     if data.shape[0] == 0:
@@ -399,8 +449,9 @@ def hetero_mini_batch(data, species=None, type='av_diss'):
     return result
 
 
-def save_heterogeneity_plots(hetero1, hetero2, output_dir, sample, species = None):
+def _save_heterogeneity_plots(hetero1, hetero2, output_dir, sample, species = None):
     """
+    NOTE: DEPRECATED
     Exports html heterogeneity pie chart and bar plot
     """
     # Values corresponding to each measure

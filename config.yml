@@ -73,7 +73,7 @@ coculture_files:
     You can use both relative paths and paths based on the home directory (~).
 
 prev_trained_model:
-  path:
+  path: Testfiles/cs_output/model
   required: false
   default:
   description: >
@@ -206,7 +206,7 @@ z_axis:
 
 filter_out_uncertain:
   value: true
-  threshold: 0.5
+  threshold: 0.6
   required: false
   default: false
   description: >
@@ -281,24 +281,27 @@ stain2_train:
     Any event meeting the threshold will be classified as `dead`.
   type: Stain
 
+# DNA stain: cells - debris  ("$LABEL_debris";) FITC-A
 stain1_predict:
   channel: FITC-A
   sign: greater_than
   value: 500000
   required: false
   description: >
-    This stain specifically describes total cells; 
-    all events where the threshold is met will be classified as `cells`. The rest of the events will be classified as `debris`.
+    This stain specifically describes total cells.
+    All events meeting the threshold will be classified as `cell`. The rest of the events will be classified as `debris`.
   type: Stain
 
+# Dead/live stain: dead - live ("$LABEL_dead")  - PerCP-H
 stain2_predict:
   channel: PerCP-H
   sign: greater_than
   value: 2000000
   required: false
   description: >
-    This stain specifically marks dead cells; 
-    Any event meeting the threshold will be classified as `dead`.
+    This stain specifically marks dead cells.
+    All events meeting the threshold will be classified as `dead`. The rest will be classified as `live`, but careful! 
+    You need to combine this with stain1 to make sure you have living cells.
   type: Stain
 
 extra_stains:

@@ -171,57 +171,40 @@ def apply_gating(data_df: pd.DataFrame,
         gated_data_df['predictions'] = predictions_column
 
     if stain1 is not None:
-
+        """ STAIN FOR CELLS / DEBRIS """
         if stain1.channel is not None and stain1.channel != "Not applicable":
-
-            # Initialize the 'state' column with 'not dead'
-            gated_data_df['dead'] = False
-            # Apply gating based on the first stain (live/dead)
-            if stain1.sign in ['>', 'greater_than']:
-                gated_data_df.loc[gated_data_df[stain1.channel] > stain1.value, 'dead'] = True
-            elif stain1.sign in ['<', 'less_than']:
-                gated_data_df.loc[gated_data_df[stain1.channel] < stain1.value, 'dead'] = True
-            # Sannity check
-            try:
-                stain_sannity_check(gated_data_df, "dead", stain1.channel, stain1.sign, stain1.value)
-                all_labels.append("dead")
-            except ValueError as e:
-                raise ValueError(f"Gating failed for stain1: {e}") from e  # Preserve original traceback
-
-    if stain2 is not None:
-        if stain2.channel is not None and stain2.channel != "Not applicable":
 
             # Initialize the 'state' column with 'not dead'
             gated_data_df['cell'] = False
             # Apply gating based on the first stain (live/dead)
-            if stain2.sign in ['>', 'greater_than']:
-                gated_data_df.loc[gated_data_df[stain2.channel] > stain2.value, 'cell'] = True
-            elif stain2.sign in ['<', 'less_than']:
-                gated_data_df.loc[gated_data_df[stain2.channel] < stain2.value, 'cell'] = True
+            if stain1.sign in ['>', 'greater_than']:
+                gated_data_df.loc[gated_data_df[stain1.channel] > stain1.value, 'cell'] = True
+            elif stain1.sign in ['<', 'less_than']:
+                gated_data_df.loc[gated_data_df[stain1.channel] < stain1.value, 'cell'] = True
             # Sannity check
             try:
-                stain_sannity_check(gated_data_df, "cell", stain2.channel, stain2.sign, stain2.value)
+                stain_sannity_check(gated_data_df, "cell", stain1.channel, stain1.sign, stain1.value)
                 all_labels.append("cell")
             except ValueError as e:
+                raise ValueError(f"Gating failed for stain1: {e}") from e  # Preserve original traceback
+
+    if stain2 is not None:
+        """ STAIN FOR LIVE / DEAD """
+        if stain2.channel is not None and stain2.channel != "Not applicable":
+
+            # Initialize the 'state' column with 'not dead'
+            gated_data_df['dead'] = False
+            # Apply gating based on the first stain (live/dead)
+            if stain2.sign in ['>', 'greater_than']:
+                gated_data_df.loc[gated_data_df[stain2.channel] > stain2.value, 'dead'] = True
+            elif stain2.sign in ['<', 'less_than']:
+                gated_data_df.loc[gated_data_df[stain2.channel] < stain2.value, 'dead'] = True
+            # Sannity check
+            try:
+                stain_sannity_check(gated_data_df, "dead", stain2.channel, stain2.sign, stain2.value)
+                all_labels.append("dead")
+            except ValueError as e:
                 raise ValueError(f"Gating failed for stain2: {e}") from e  # Preserve original traceback
-
-    # Apply gating based on the second stain (debris)
-    if stain1 is not None and stain2 is not None:
-        if stain2.channel and stain2.value and stain1.channel:
-
-            gated_data_df["state"] = "debris"
-
-            gated_data_df.loc[
-                (gated_data_df["dead"] == False) & (gated_data_df["cell"] == True),    # NOTE: use loc to accesses the rows where the condition is met.
-                "state"                                                                # NOTE: new syntax, specifies the column you want to modify.
-            ] = "live"
-
-            gated_data_df.loc[
-                (gated_data_df["dead"] == True) & (gated_data_df["cell"] == True),
-                "state"
-            ] = "inactive"
-
-            all_labels.append("state")
 
     # Apply gating on extra stains
     if extra_stains is not None:
@@ -252,44 +235,15 @@ def save_gating_results(gated_data_df, output_dir, sample, x_axis, y_axis, z_axi
     :param y_axis: Name of the X-axis to be plotted (channel among those on the .fcs file)
     :param z_axis: Name of the X-axis to be plotted (channel among those on the .fcs file)
     :param all_labels: A list with all the labels for the the stains provided
-
     """
+
     # Create a directory for gating results
     gated_dir = os.path.join(output_dir, 'gated')
     os.makedirs(gated_dir, exist_ok=True)
 
-    # Initialize an empty DataFrame to hold all state counts
-    combined_counts_df = pd.DataFrame()
-
     # Iterate over each species and calculate the state counts
-    species_names = gated_data_df['predictions'].unique()
-    if "state" in all_labels:
-        all_labels.remove("dead") ; all_labels.remove("cell")
+    species_names = list(gated_data_df['predictions'].unique())
 
-    for species in species_names:
-        species_df = pd.DataFrame()
-        for label in all_labels:
-            if label == "state":
-                s = gated_data_df[gated_data_df['predictions'] == species][label].value_counts()
-            else:
-                s = gated_data_df[gated_data_df['predictions'] == species][label].value_counts()
-                if s.index[0] == True:
-                    s.index = [label, "_".join(["not", label])] if len(s.index) == 2 else [label]
-                else:
-                    s.index = ["_".join(["not", label]), label] if len(s.index) == 2 else ["_".join(["not", label])] # Default for False case
-            s.name = species
-            species_df = pd.concat([species_df, s], axis=0)
-
-        combined_counts_df = pd.concat([combined_counts_df, species_df], axis=1)
-
-    # Save the combined state counts to a single CSV file
-    combined_counts_df.to_csv(
-        os.path.join(gated_dir, "_".join([sample,'gating.csv']))
-    )
-    print(
-        f"File with gating counts for sample {sample} saved at:\n",
-        os.path.join(gated_dir, "_".join([sample,'gating.csv']))
-    )
     gated_data_df.to_csv(
         os.path.join(gated_dir, "_".join([sample, 'raw', 'gating.csv']))
     )
@@ -325,31 +279,25 @@ def merge_prediction_results(output_dir, prediction_type):
             if matched_pattern is None:
                 continue  # Skip files that don't match any pattern
 
-            file_path = os.path.join(output_dir, file_name)
-
             # Read each file as a DataFrame
-            df = pd.read_csv(file_path, index_col = 0)  # Make sure you keep first column as index of the dataframe
+            file_path = os.path.join(output_dir, file_name)
+            df = pd.read_csv(file_path, index_col = 0)  #  Make sure you keep first column as index of the dataframe
 
-            # Build a one-column dataframe using index and column names as index
-            pairwise_list = [
-                (f"{pred}_{state}", df.loc[pred, state])
-                for pred in df.index
-                for state in df.columns
-            ]
             # Name the "count" column based on the filename (without extension)
             new_column_name = file_name.split(matched_pattern)[0][:-1]
-            one_col_df = pd.DataFrame(pairwise_list, columns=["category", new_column_name]).set_index("category")
-            if any(key in matched_pattern for key in ["dead", "cells"]):
-                label = matched_pattern.split("_")[0]
-                one_col_df.index = one_col_df.index.str.replace("_True", f"_{label}").str.replace("_False", f"_{label}_False")
-
-            dfs.append(one_col_df)
+            df.columns = [new_column_name]
+            dfs.append(df)
 
             pattern = matched_pattern
 
         # Merge all DataFrames on the "predictions" column
         result = pd.concat(dfs, axis=1)
-
+        result = result.dropna(how='all')
+        unknonws = [x for x in result.index if "Unknown" in x]
+        if len(unknonws) > 0:
+            sum_unknowns = result.loc[unknonws].sum()
+            result = result.drop(index=unknonws)
+            result.loc["Unknown"] = sum_unknowns
     else:
 
         pattern = "heterogeneity_results"
@@ -380,25 +328,3 @@ def merge_prediction_results(output_dir, prediction_type):
         result.to_csv(merged_file, index=True)
     except:
         print("No merging case. Please go through the output files of each sample.")
-
-def compute_label_counts(gating_df, all_labels, output_dir, sample):
-    """
-    Computes value counts for each label grouped by 'predictions' in the gating_df.
-
-    Parameters:
-    - gating_df (pd.DataFrame): The input DataFrame containing 'predictions' and label columns.
-    - all_labels (list): List of label columns to compute counts for.
-    - output_dir (str): Directory where output files should be saved.
-    - sample (str): Sample identifier used for naming output files.
-    - create_file_path (function): Function to generate output file paths.
-
-    Returns:
-    - dict: A dictionary mapping output file paths to computed count DataFrames.
-    """
-    output_data = {}
-    for label in all_labels:
-        all_counts = gating_df.groupby("predictions")[label].value_counts().unstack(fill_value=0)
-        outputfile = create_file_path(output_dir, sample, "_".join([label, "counts"]), "csv")
-        output_data[outputfile] = all_counts
-
-    return output_data
