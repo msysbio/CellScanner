@@ -2,11 +2,10 @@ import os
 import math
 import numpy as np
 import pandas as pd
-from typing import List
+from scipy.stats import entropy
 
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics import pairwise_distances
-from scipy.stats import entropy
 
 from .helpers import create_file_path, get_stains_from_panel, apply_gating, save_gating_results
 from .illustrations import species_plot, uncertainty_plot, heterogeneity_pie_chart, heterogeneity_bar_plot, create_color_map
@@ -14,7 +13,8 @@ from .illustrations import species_plot, uncertainty_plot, heterogeneity_pie_cha
 # Main function to be called from the worker
 def predict(PredictionPanel=None, **kwargs):
     """
-    Runs
+    Executes the prediction workflow, including loading models,
+    predicting species, applying gating, performing heterogeneity analysis, and generating visualizations.
 
     :param PredictionPanel:
     :param kwargs:
@@ -22,9 +22,6 @@ def predict(PredictionPanel=None, **kwargs):
     gui = False
 
     if type(PredictionPanel).__name__ == "PredictionPanel":
-
-
-        print(PredictionPanel.__dict__)
 
         # Attempt to retrieve components from file_panel first
         model, scaler, label_encoder, scaling_constant = get_model_components(PredictionPanel.file_panel)
@@ -118,21 +115,10 @@ def predict(PredictionPanel=None, **kwargs):
     if filter_out_uncertain:
         data_df_pred.loc[data_df_pred["uncertainties"] > uncertainty_threshold, "predictions"] = "Unknown"
 
-    # Save prediction results and plot the 3D scatter plot
-    species_list = list(index_to_species.values())
-    save_prediction_results(
-        data_df_pred,
-        species_list,
-        output_dir,
-        x_axis_combo, y_axis_combo, z_axis_combo,
-        sample=sample,
-        scaling_constant=scaling_constant,
-        uncertainty_threshold=uncertainty_threshold,
-        filter_out_uncertain=filter_out_uncertain
-    )
-
     # Gating -- may return a "state" column mentioning live - dead cells, it may not
     if gating:
+
+        print("Run gating...")
 
         # Apply gating
         gating_df, all_labels = apply_gating(
@@ -149,23 +135,42 @@ def predict(PredictionPanel=None, **kwargs):
         )
         # Perform heterogeneity analysis
         hetero_df = gating_df.drop(columns=all_labels)
-
+        data_df_pred = gating_df.copy()
     else:
         hetero_df = data_df_pred.copy()
 
     # Calculate heterogeneity
+    species_list = list(index_to_species.values())
     run_heterogeneity(hetero_df, species_list, output_dir, sample)
+
+    # Save prediction results and plot the 3D scatter plot
+    save_prediction_results(
+        data_df_pred,
+        species_list,
+        output_dir,
+        x_axis_combo, y_axis_combo, z_axis_combo,
+        sample=sample,
+        scaling_constant=scaling_constant,
+        uncertainty_threshold=uncertainty_threshold,
+        filter_out_uncertain=filter_out_uncertain,
+        all_labels = all_labels if 'all_labels' in locals() else None
+    )
 
     if not gui:
         return data_df_pred
 
 
 # Functions to be used by the predict()
-def predict_species(data_df, model, scaler, label_encoder, scaling_constant):
+def predict_species(data_df: pd.DataFrame,
+                    model: "tensorflow.keras.Sequential",
+                    scaler: "sklearn.preprocessing.StandardScaler",
+                    label_encoder: "sklearn.preprocessing.LabelEncoder",
+                    scaling_constant: int
+                    ):
     """
-
     :param data_df:
     :param model:
+    :type model: `keras.models.Sequential` or `Sequential API documentation <https://keras.io/api/models/sequential/>`
     :param scaler:
     :param label_encoder:
     :param scaling_constant:
@@ -201,16 +206,17 @@ def predict_species(data_df, model, scaler, label_encoder, scaling_constant):
 
 
 def save_prediction_results(
-    data_df: pd.DataFrame, species_list: List,
+    data_df: pd.DataFrame, species_list: list,
     output_dir: str,
-    x_axis, y_axis, z_axis,
+    x_axis: str, y_axis: str, z_axis: str,
     sample: str = None,
     scaling_constant: int = 150,
     uncertainty_threshold: float = 0.5,
-    filter_out_uncertain: bool = False
+    filter_out_uncertain: bool = False,
+    all_labels: list = None
     ):
     """
-    Saves prediction file for a coculture CellScanner prediction along with its corresponding species and uncertainty plolts.
+    Saves prediction file for a coculture sample CellScanner prediction along with its corresponding species and uncertainty plolts.
     """
     # Ensure `data_df` is still a DataFrame and not an ndarray
     if not isinstance(data_df, pd.DataFrame):
@@ -221,22 +227,99 @@ def save_prediction_results(
     outfile_prediction_counts = create_file_path(output_dir, sample, 'prediction_counts', 'csv')
     plot_path_species = create_file_path(output_dir, sample, '3D_coculture_predictions_species', 'html')
 
-    # Save predictions and prediction counts to a CSV file
+    # Save raw predictions and prediction counts to a CSV file
     data_df.to_csv(outfile_predictions)
-    prediction_counts = data_df['predictions'].value_counts()
-    prediction_counts.to_csv(outfile_prediction_counts)
-    print("Prediction counts saved to:", outfile_prediction_counts)
 
     # Calculate and save uncertainty counts by species
     if filter_out_uncertain:
-        outfile_uncertainties = create_file_path(output_dir, sample, 'uncertainty_counts', 'csv')
-        plot_path_uncertainty = create_file_path(output_dir, sample, '3D_coculture_predictions_uncertainty', 'html')
+        uncertaint_dir = os.path.join(output_dir, "uncertainty_counts")
+        os.makedirs(uncertaint_dir, exist_ok=True)
+        outfile_uncertainties = create_file_path(uncertaint_dir, sample, 'uncertainty_counts', 'csv')
+        plot_path_uncertainty = create_file_path(uncertaint_dir, sample, '3D_coculture_predictions_uncertainty', 'html')
         uncertainty_counts = data_df.groupby('predictions')['uncertainties'].agg(
             greater_than=lambda x: (x > uncertainty_threshold).sum(),
             less_than=lambda x: (x <= uncertainty_threshold).sum()
         )
         uncertainty_counts.to_csv(outfile_uncertainties)
         print("Uncertainty counts by species saved to:", outfile_uncertainties)
+
+    # ===============
+    # Build prediction output file
+    # NOTE: Check on PR #28 for output descriptions
+    # ===============
+    df = data_df.copy()
+    counts_df = pd.DataFrame(columns=["count"])      # NOTE: the value_counts() of pd, returns a df with a column called "count"
+    species_names = list(df['predictions'].unique())
+
+    # Uncertainty higher in hierarchy than all
+    if "Unknown" in species_names:
+
+        # Add counts to counts_df
+        unknown_df = df[df["predictions"]== "Unknown"]
+        counts_df.loc["Unknown"] = {"count": unknown_df.shape[0]}
+
+        # Remove from gate df
+        df = df[df["predictions"] != "Unknown"]
+        species_names.remove("Unknown")
+
+    # If both basic stains there, cell/debris precedes
+    if {"cell", "dead"}.issubset(df.columns):
+
+        for species in species_names:
+            # NOTE: If cell column is False, thus threshold holds, entry is a debris
+            sp_debris = df[(df['predictions'] == species) & (df["cell"] == False)]
+            counts_df.loc["_".join([species, "debris"])] = {"count": sp_debris.shape[0]}
+
+            # Remove species debris from working df
+            df = df[~df.index.isin(sp_debris.index)]
+
+            # Count how many dead/live from the remaining
+            # NOTE: If dead column is True then, thus threshold holds, the entry is a dead entry
+            sp_dead = df[df['predictions'] == species]["dead"].value_counts()
+            counts_df.loc["_".join([species, "live"])] = sp_dead.get(False, None) if False in sp_dead else print(f"Species: {species} has no live entries")
+            counts_df.loc["_".join([species, "dead"])] = sp_dead.get(True, None) if True in sp_dead else print(f"Species: {species} has no dead entries")
+
+    elif "cell" in df.columns:
+
+        for species in species_names:
+            sp_debris = df[df['predictions'] == species]["cell"].value_counts()
+            counts_df.loc["_".join([species, "debris"])] = sp_debris.get(False, None) if False in sp_debris else print(f"Species: {species} has no debris entries")
+            counts_df.loc[species] = sp_debris.get(True, None) if True in sp_debris else print(f"Species: {species} has no entries not being debris.")
+
+    elif "dead" in df.columns:
+
+        for species in species_names:
+
+            # Count how many dead/live from the remaining
+            sp_dead = df[df['predictions'] == species]["dead"].value_counts()
+            counts_df.loc["_".join([species, "live"])] = sp_dead.get(False, None) if False in sp_dead else print(f"Species: {species} has no live entries")
+            counts_df.loc["_".join([species, "dead"])] = sp_dead.get(True, None) if True in sp_dead else print(f"Species: {species} has no dead entries")
+    else:
+
+        if all_labels is not None:
+            for label in all_labels:
+                for species in species_names:
+                    sp_df = df[df['predictions'] == species][label].value_counts()
+                    counts_df.loc["_".join([species, "not", label])] = (
+                        sp_df.get(False, None)
+                        if False in sp_df
+                        else print(f"Species: {species} has no entries of not being {label}")
+                    )
+                    counts_df.loc["_".join([species, label])] = (
+                        sp_df.get(True, None)
+                        if True in sp_df
+                        else print(f"Species: {species} has no dead entries of {label}")
+                    )
+                    print("ATTENTION! In this case the number of entries is not in line with the entries on the .fcs file")
+        else:
+            print("Basic case where no gating - no stains at all.")
+            counts_df = pd.concat([counts_df, df['predictions'].value_counts()])
+
+    counts_df.to_csv(outfile_prediction_counts)
+
+    # ----------------
+    # PLOTS
+    # ----------------
 
     # Perform arcsinh transformation on numeric columns
     coculture_data_numeric = data_df.drop(columns=['predictions', 'uncertainties'])
@@ -265,7 +348,7 @@ def save_prediction_results(
         )
 
 
-def run_heterogeneity(df, species_list, output_dir, sample):
+def run_heterogeneity(df: pd.DataFrame, species_list: list, output_dir: str, sample: str):
     """
     Calculate, plot and export to files heterogeneity metrics.
 
@@ -279,12 +362,12 @@ def run_heterogeneity(df, species_list, output_dir, sample):
     os.makedirs(heterogeneity_dir, exist_ok=True)
 
     hetero_df = df.select_dtypes(include='number')
-    hetero_df.drop('uncertainties', axis=1, inplace=True)
+    try:
+        hetero_df.drop('uncertainties', axis=1, inplace=True)
+    except:
+        print("No uncertainties; dropped in gating_df.drop(columns=all_labels).")
+        pass
     hetero_df['predictions'] = df['predictions']
-
-    print("\n\n>>>>>>>>>>>>>>>>>>>>>>>>>>")
-    print(hetero_df.columns)
-    print(">>>>>>>>>>>>>>>>>>>>>>>>>>\n\n")
 
     # Compute heterogeneity measures for the sample
     try:
@@ -292,11 +375,6 @@ def run_heterogeneity(df, species_list, output_dir, sample):
         hetero2 = hetero_mini_batch(hetero_df.iloc[:, :-1])
     except ValueError as e:
         raise ValueError("Error calculating heterogeneity.") from e
-
-    # Create and save heterogeneity plots
-    save_heterogeneity_plots(hetero1, hetero2, heterogeneity_dir, sample)
-    res_file = "_".join([sample, "heterogeneity_results.csv"])
-    hetero_res_file = os.path.join(heterogeneity_dir, res_file)
 
     # Compute heterogeneity metrics for each species
     hetero_results_list = []
@@ -309,15 +387,13 @@ def run_heterogeneity(df, species_list, output_dir, sample):
             hetero1 = hetero_simple(df.iloc[:, :-1])
             hetero2 = hetero_mini_batch(df.iloc[:, :-1], species)
 
-            # Build heterogeneity plots
-            save_heterogeneity_plots(hetero1, hetero2, heterogeneity_dir, sample, species)
-
             # Append the result as a dictionary to the list
             hetero_results_list.append({
                 "Species": species,
                 "Simple Heterogeneity": hetero1,
                 "Medoid Heterogeneity": hetero2
             })
+
         except ValueError as e:
             raise ValueError("Error calculating heterogeneity.") from e
 
@@ -325,16 +401,22 @@ def run_heterogeneity(df, species_list, output_dir, sample):
     hetero_results_df = pd.DataFrame(hetero_results_list)
 
     # Save the DataFrame to a CSV file
+    res_file = "_".join([sample, "heterogeneity_results.csv"])
+    hetero_res_file = os.path.join(heterogeneity_dir, res_file)
     hetero_results_df.to_csv(hetero_res_file, sep="\t", index=False)
 
 
-def hetero_simple(data):
-    """Calculate simple heterogeneity as the sum of mean ranges across all channels."""
+def hetero_simple(data: pd.DataFrame):
+    """
+    Calculate simple heterogeneity as the sum of mean ranges across all channels.
+
+    :return: numpy.int64
+    """
     ranges = data.apply(np.ptp, axis=0)
     return np.sum(ranges.mean())
 
 
-def hetero_mini_batch(data, species=None, type='av_diss'):
+def hetero_mini_batch(data: pd.DataFrame, species: str=None, type='av_diss'):
     """
     Uses a variant of K-Means clustering that is faster and more memory-efficient asking for a single cluster
     similar to computing the mean (or geometric center) of all points.
@@ -345,7 +427,7 @@ def hetero_mini_batch(data, species=None, type='av_diss'):
     :param data:
     :param species:
     :param type:
-    :return result: Maximum distance between the centroid and data points
+    :return result: numpy.float64 - Maximum distance between the centroid and data points
     """
     # Use MiniBatchKMeans as an alternative
     if data.shape[0] == 0:
@@ -368,8 +450,9 @@ def hetero_mini_batch(data, species=None, type='av_diss'):
     return result
 
 
-def save_heterogeneity_plots(hetero1, hetero2, output_dir, sample, species = None):
+def _save_heterogeneity_plots(hetero1, hetero2, output_dir, sample, species = None):
     """
+    NOTE: DEPRECATED
     Exports html heterogeneity pie chart and bar plot
     """
     # Values corresponding to each measure
@@ -386,44 +469,6 @@ def save_heterogeneity_plots(hetero1, hetero2, output_dir, sample, species = Non
 
     # Bar chart
     heterogeneity_bar_plot(labels, metrics_data, colors, output_dir, sample, species, plot_width, plot_height)
-
-
-def merge_prediction_results(output_dir, prediction_type):
-    """
-    Merge prediction and uncertainty output files into a single file for each case when multiple coculture files are provided.
-
-    :param output_dir: Output directory where CellScanner prediction files were saved
-    :param prediction_type: TYpe of CellScanner output file; `prediction` (counts) or `uncertainty` (heretogeneity)
-    """
-    if prediction_type not in ["prediction", "uncertainty"]:
-        raise ValueError(f"Please provide a valide prediction_type: 'prediction|uncertainty'")
-
-    if prediction_type == "prediction":
-        pattern = "_".join([prediction_type, "counts"])
-    else:
-        pattern = "heterogeneity_results"
-        output_dir = os.path.join(output_dir, "heterogeneity_results")
-
-    # Loop through all files in the directory
-    dfs = []
-    for file_name in os.listdir(output_dir):
-        if pattern not in file_name:
-            continue
-        file_path = os.path.join(output_dir, file_name)
-        # Read each file as a DataFrame
-        df = pd.read_csv(file_path, sep=",")  # Adjust separator if needed
-        # Rename the "count" column to the filename (without extension)
-        new_column_name = file_name.split(pattern)[0][:-1]
-        df = df.rename(columns={"count": new_column_name})
-        dfs.append(df)
-
-    # Merge all DataFrames on the "predictions" column
-    result = pd.concat(dfs, axis=1).loc[:,~pd.concat(dfs, axis=1).columns.duplicated()]
-
-    # Save the final result to a CSV file
-    merged_filename = "".join(["merged_", pattern, ".csv"])
-    merged_file = os.path.join(output_dir, merged_filename)
-    result.to_csv(merged_file, index=False)
 
 
 def get_model_components(panel):

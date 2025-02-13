@@ -22,7 +22,8 @@ The flow cytometry data for the growth curves shown above are available at
 We are going to work here only with one time point (50 hours). You can find the files used in the tutorial 
 [here](http://msysbiology.com/documents/CellScanner/CS2TutorialFiles.zip). 
  
-When you open CellScanner, you see the graphical user interface (GUI) shown below. Please be patient, opening the GUI can sometimes take a minute.
+
+When you open CellScanner, you see the graphical user interface (GUI) shown below. Please be patient, opening the GUI can sometimes take a minute. For further information on how to install CellScanner, you may have a look [here](./install.md).
 
 ![GUI](../_static//GUI.png)
 

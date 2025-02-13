@@ -1,40 +1,40 @@
-# ImportFiles.py
-import os
-import shutil
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, \
-    QFileDialog, QInputDialog, QMessageBox, QLabel, QSpinBox
-import fcsparser
-
-from .helpers import get_app_dir, time_based_dir, button_style, load_model_from_files
-from .GUIhelpers import LabeledSpinBox, GuiMessages, load_fcs_file
-
 """
-ImportFiles.py
-
-This module is part of the CellScanner application.
-The `ImportFilePanel` class provides a user interface panel for selecting and managing flow cytometry files
+The :class:`ImportFilePanel` class provides a user interface panel for selecting and managing flow cytometry files
 for monoculture species 1, monoculture species 2, and blank samples. The selected files are copied to a
 working directory, where they can be processed by other components of the application.
 
 Key Features:
-- Allows users to select `.fcs` files for species 1, species 2, and blank samples.
+
+- Allows users to select ``.fcs`` files for species 1, species 2, and blank samples.
 - Files are copied to a working directory to ensure the original files remain unchanged.
 - Displays metadata and the first few rows of data for each selected file.
 - Handles file parsing using the `fcsparser` library.
 - Supports cleanup of the working directory to remove copied files.
 
-Classes:
-- ImportFilePanel: A QWidget subclass that provides the interface for selecting files and managing the working directory.
+"""
+import os
+import shutil
+import fcsparser
+
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, \
+    QFileDialog, QInputDialog, QMessageBox
 
 
-Author: Ermis Ioannis Michail Delopoulos
-Date: 22/08/2024
+from .helpers import get_app_dir, time_based_dir, load_model_from_files
+from .GUIhelpers import button_style, LabeledSpinBox, _GuiMessages, load_fcs_file
 
 """
+Authors:
+    - Ermis Ioannis Michail Delopoulos
+    - Haris Zafeiropoulos
 
+Date: 2024-2025
+"""
 
 class ImportFilePanel(QWidget):
-
+    """
+    A QWidget subclass that provides the interface for selecting files and managing the working directory.
+    """
     def __init__(self, parent=None):
         super().__init__(parent)
         self.layout = QVBoxLayout(self)
@@ -55,7 +55,7 @@ class ImportFilePanel(QWidget):
         blank_layout = QHBoxLayout()
         self.blank_button = QPushButton("Select Blank Files (.fcs)", self)
         self.blank_button.setStyleSheet(button_style())
-        self.blank_button.setToolTip(GuiMessages.BLANKS_MULTIFILES)
+        self.blank_button.setToolTip(_GuiMessages.BLANKS_MULTIFILES)
         self.blank_button.clicked.connect(self.select_blank_files)
         blank_layout.addWidget(self.blank_button)
         self.layout.addLayout(blank_layout)
@@ -64,12 +64,12 @@ class ImportFilePanel(QWidget):
         self.blank_files = []
 
         # Button to add a new species selection
-        self.init_species_layout()
+        self._init_species_layout()
 
         # Previously trained model button
         self.previously_trained_model_button = QPushButton("Add Model", self)
         self.previously_trained_model_button.setStyleSheet(button_style(bck_col="#f7c67d", bck_col_hov="#deb270"))
-        self.previously_trained_model_button.setToolTip(GuiMessages.PREVIOUSLY_TRAINED_MODEL)
+        self.previously_trained_model_button.setToolTip(_GuiMessages.PREVIOUSLY_TRAINED_MODEL)
         self.previously_trained_model_button.clicked.connect(self.add_prev_trained_model)
         self.layout.addWidget(self.previously_trained_model_button)
 
@@ -82,7 +82,7 @@ class ImportFilePanel(QWidget):
 
         # Model load
         self.model_loaded = False
-        self.toggle_const_scaling()
+        self._toggle_const_scaling()
 
         # Button for output dir
         if os.getcwd() != "/app":
@@ -90,8 +90,7 @@ class ImportFilePanel(QWidget):
             outdir_layout = QHBoxLayout()
             self.output_dir_button = QPushButton("Set output directory", self)
             self.output_dir_button.setStyleSheet(button_style(bck_col="#f7c67d", bck_col_hov="#deb270"))
-            self.output_dir_button.setToolTip(
-                "Optional. Provide output directory where intermediate files and predictions will be saved.")
+            self.output_dir_button.setToolTip(_GuiMessages.OUTPUT_DIR)
             self.output_dir_button.clicked.connect(self.select_directory)
             outdir_layout.addWidget(self.output_dir_button)
             self.layout.addLayout(outdir_layout)
@@ -225,17 +224,17 @@ class ImportFilePanel(QWidget):
                 self.species_files = {}
             except:
                 QMessageBox.information(self, "Model loading", "Model files were not loaded!")
-            self.toggle_const_scaling()
+            self._toggle_const_scaling()
 
 
-    def toggle_const_scaling(self):
+    def _toggle_const_scaling(self):
         # Show or hide scaling constant layout based on model_loaded flag
         self.model_loaded = True if self.model is not None else False
         self.scaling_constant.label.setVisible(self.model_loaded)
         self.scaling_constant.setVisible(self.model_loaded)
 
 
-    def init_species_layout(self):
+    def _init_species_layout(self):
         self.species_layout = QHBoxLayout()
         self.add_species_button = QPushButton("Add Species", self)
         self.add_species_button.setStyleSheet(button_style())
@@ -243,5 +242,3 @@ class ImportFilePanel(QWidget):
         self.add_species_button.clicked.connect(self.add_species)
         self.species_layout.addWidget(self.add_species_button)
         self.layout.addLayout(self.species_layout)
-
-

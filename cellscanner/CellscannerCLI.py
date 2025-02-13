@@ -1,15 +1,22 @@
+#!/usr/bin/env python
+"""
+CellScanner Command Line Interface main class.
+
+Besides using CellScanner throught its GUI, you may use it through a CLI.
+To this end, you should first complete a [`config.yml`](../config.yml) file, providing the necessary parameters.
+"""
 import os
 import sys
 import yaml
 import argparse
 import fcsparser
 from collections import defaultdict
+
 # Load CellScanner features
+from scripts.run_prediction import predict
 from scripts.apply_umap import process_files
 from scripts.nn import prepare_for_training, train_neural_network
-from scripts.run_prediction import predict, merge_prediction_results
-from scripts.helpers import get_app_dir, time_based_dir, load_model_from_files, Stain
-
+from scripts.helpers import get_app_dir, time_based_dir, load_model_from_files, merge_prediction_results, Stain
 
 class CellScannerCLI():
 
@@ -85,35 +92,47 @@ class CellScannerCLI():
         self.stain1_train, self.stain2_train = None, None
         self.stain1_predict, self.stain2_predict, self.extra_stains = None, None, None
         if self.gating:
+
             # Training
             self.stain1_train = get_stain_params("stain1_train", conf)
             self.stain2_train = get_stain_params("stain2_train", conf)
+
             # Predict
             self.stain1_predict = get_stain_params("stain1_predict", conf)
             self.stain2_predict = get_stain_params("stain2_predict", conf)
+
             # Extra stains for predict
             self.extra_stains = get_extra_stains(conf)
 
             self._channel_sannity_check()
 
     def _channel_sannity_check(self):
-
+        """
+        Checks whether a channel provided by the user is actually amont those on the .fcs files.
+        """
         basic_stains = [self.stain1_train, self.stain2_train, self.stain1_predict, self.stain2_predict]
-        print(self.blank_files)
-        _, data_df = fcsparser.parse(list(self.blank_files)[0], reformat_meta=True)
+
+        if self.prev_trained_model is None:
+            _, data_df = fcsparser.parse(list(self.blank_files)[0], reformat_meta=True)
+        else:
+            _, data_df = fcsparser.parse(list(self.coculture_files)[0], reformat_meta=True)
 
         all_channels = data_df.columns
 
         for stain in basic_stains:
-            if stain.channel not in all_channels:
+            if stain.channel is not None and stain.channel not in all_channels:
                 raise ValueError(f"Channel provided for gating {stain.channel} not present in the .fcs files provided.")
 
         for stain in self.extra_stains:
             if stain not in all_channels:
                 raise ValueError(f"Channel provided for gating {stain.channel} not present in the .fcs files provided.")
+
         print("Valid channel names.")
 
     def train_model(self):
+        """
+        A wrapper for the main training model - related CellScanner functions.
+        """
         print("\nAbout to preprocess input files.")
         cleaned_data = process_files(
             n_events = self.events, umap_n_neighbors=self.n_neighbors,
@@ -144,7 +163,11 @@ class CellScannerCLI():
         print("Model complete!")
 
     def predict_coculture(self):
-
+        """
+        A wrapper for the running prediction step - related CellScanner functions.
+        In case where several co-culture files have been provided (samples), CellScanner makes its prediction per sample
+        and in the end merges them in a single file.
+        """
         print("About to start predicting co-culture profiles.")
 
         if not all([self.model, self.scaler, self.le]):
@@ -191,7 +214,6 @@ class CellScannerCLI():
                 "filter_out_uncertain": self.filter_out_uncertain,
                 "uncertainty_threshold": self.uncertainty_threshold
             }
-
             # Add specific parameters based on gating
             if self.gating:
                 predict_params.update({
@@ -212,9 +234,13 @@ class CellScannerCLI():
             merge_prediction_results(self.predict_dir, "uncertainty")
 
 
-def load_yaml(yaml_file):
+def load_yaml(yaml_file: str):
     """
     Load a yaml file
+
+    :param yaml_file: path to the YAML file
+    :return: A ``dict`` with the YAML file parameters
+    :rtype: dict
     """
     with open(yaml_file, 'r') as f:
         try:
@@ -225,26 +251,21 @@ def load_yaml(yaml_file):
             sys.exit(1)
 
 
-def parse_dicts(dir_list, entity, names=None):
+def parse_dicts(dir_list: [dict], entity: str, names: str=None):
     """
-   Processes a list of directory info to extract file paths and optionally map them to names.
+    Processes a list of directory info to extract file paths and optionally map them to names.
+    If ``names`` is provided, returns a ``tuple`` including a set of file paths and a dictionary with the labels assigned as keys
+    and their corresponding files as values.
+    Otherwise, returns only the set of file paths.
 
-    Parameters:
-    -----------
-    dir_list : list of dicts
-        List containing directory info, each with 'path' and 'filenames'.
-    entity : str
-        The entity being processed (e.g., "species_files").
-    names : str, optional
-        The key to map filenames to names (labels). If omitted, only file paths are returned.
+    :param dir_list: List containing directory info, each with 'path' and 'filenames'.
+    :param entity: The entity being processed (e.g., "species_files").
+    :param names  The key to map filenames to names (labels). If omitted, only file paths are returned.
 
-    Returns:
-    --------
-    set or tuple
-        - If `names` is provided, returns a tuple of:
-            - A set of file paths.
-            - A dictionary mapping names to file paths.
-        - Otherwise, returns only the set of file paths.
+    :return all_files: A set of file paths
+    :rtype: set
+    :retur all_maps: A dictionary mapping names to file paths.
+    :rtype: dict
     """
     all_files = set()
     if names:
@@ -295,7 +316,13 @@ def parse_dicts(dir_list, entity, names=None):
     return (all_files, all_maps) if names else all_files
 
 
-def get_param_value(param, conf):
+def get_param_value(param: str, conf: dict):
+    """
+    Get values of a specific parameter from the YAML configuration file
+
+    :param param: Parameter to get their value
+    :param conf: Parameters as loaded from the YAML file
+    """
     v = conf.get(param, {}).get("value") or conf.get(param, {}).get("name") or conf.get(param, {}).get("path")
     if v is None:
         v = conf.get(param).get("default")
@@ -304,12 +331,11 @@ def get_param_value(param, conf):
     return v
 
 
-def get_extra_stains(conf):
+def get_extra_stains(conf: dict):
     """
     Get extra stains provided by the user
 
-    :return extra_stains (Dict): A dictionary with channel name as key and a set with the sign, threshold and label
-    of the stain as value
+    :return: A dictionary with channel name as key and a set with the sign, threshold and label of the stain as their value
     """
     extra_stains = {}
     extras = conf.get("extra_stains").get("stains")
@@ -323,9 +349,13 @@ def get_extra_stains(conf):
     return extra_stains
 
 
-def get_stain_params(stain, conf):
+def get_stain_params(stain: str, conf: dict):
     """
     Build a Stain instance based on the configuration file.
+
+    :param stain: Stain entry on the config.yaml file; it can take one of the following values:
+    ``stain1_train``, ``stain2_train``, ``stain1_predict``, ``stain2_predict``, ``extra_stains``
+    :param conf: A dictionary with channel name as key and a set with the sign, threshold and label of the stain as their value
     """
     # Get params from the yaml file
     params = conf.get(stain)
@@ -335,11 +365,23 @@ def get_stain_params(stain, conf):
     return build_stain(stain, channel, sign, value)
 
 
-def build_stain(stain, channel, sign, value):
+def build_stain(stain: str, channel: str, sign: str, value: int):
+    """
+    Builds a :class:`Stain`  based on the user's settings, as loaded by the :func:`get_stain_params`
+
+    :param stain: Stain name as mentioned in the configuration YAML file to in process
+    :param channel: Name of the channel
+    :param channel: Sign of the relationship needs to hold; can be either ``>``, ``<`` in the GUI version,
+    or ``higher_than``, ``lower_than`` in the CLI
+    :param value: Threshold of the channel value
+    """
     # Check if all stain params are there
-    if not all([sign, value]) and channel!=None:
+    if not all([sign, value]) and channel is not None:
         missing = [k for k, v in {"channel": channel, "sign": sign, "value": value}.items() if v is None]
         raise ValueError(f"Please provide {' and '.join(missing)} for {stain}.")
+
+    elif channel is None:
+        return Stain(channel=None, sign=None, value=None)
 
     return Stain(channel=channel, sign=sign, value=value)
 
