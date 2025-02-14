@@ -51,15 +51,15 @@ In contrast, SYBR Green is a membrane-permeable green fluorescent stain that bin
 
 ![train model](../_static//line_gating_setting.png) 
 
-The plot below illustrates the gating carried out. PerCP and FITC refer to the red and green fluorescence channel, respectively (H and A stand for height and area of the fluorescence signal). All events above the red line and all events to the left of the green line will be treated as dead cells or debris respectively and removed.
+The plot below illustrates the gating carried out. FITC and PerCP  refer to the green and red fluorescence channel, respectively (A and H stand for area and height of the fluorescence signal). All events above the red line and all events to the left of the green line will be treated as dead cells or debris respectively and removed. The dead-cell filter is chosen leniently here to make sure that only cells with a strong red signal are treated as dead.
 
 ![line gating](../_static//line_gating.png)
 
 
 Model training should be fast (within one minute). 
-Model performance files will be stored in a sub-folder in your specified output folder (if you did not specify one, then in the CellScanner folder). 
+Model performance files will be stored in a sub-folder in your specified output folder (if you did not specify one, then in the CellScanner folder, in `cellscanner/scripts`). 
 The sub-folder name starts with `working_files` and ends with a time stamp. 
-It contains another folder called `model`, in which you will find a number of files encoding the trained neural network, a file called `model_statistics.csv` and two html files, `umap_Before_filtering.html` and `umap_After_filtering.html`, which will open in your browser when clicked. 
+It contains the input files and another folder called `model`, in which you will find a number of files encoding the trained neural network, a file called `model_statistics.csv` and two html files, `umap_Before_filtering.html` and `umap_After_filtering.html`, which will open in your browser when clicked. 
 The first shows a UMAP projection before and the second one after filtering. 
 An event is filtered if its neighbors in the UMAP embedding do not have the same label (the number of neighbors considered is among CellScanner's parameters). 
 The `model_statistics.csv` file contains information about classification performance, including accuracy, precision, recall, F1 score and the confusion matrix.
@@ -68,13 +68,13 @@ This is the confusion matrix for our tutorial files:
 
 | Species | Blank | BT | RI | 
 | ----------- | ----------- | ------- | ----|
-| Blank | 229 | 0 | 0 | 
-| BT | 0 | 567 | 0 | 
-| RI | 0 | 1 | 579 | 
+| Blank | 84 | 0 | 0 | 
+| BT | 0 | 592 | 2 | 
+| RI | 0 | 1 | 591 | 
 
-The confusion matrix is computed by creating in-silico communities with known composition and feeding them to the trained model. It shows how well each species is separated from the other species and from debris (blank). Here, the model performed very well, with only one event that was misclassified. 
+The confusion matrix is computed by creating in-silico communities with known composition and feeding them to the trained model. It shows how well each species is separated from the other species and from debris (blank). Here, the model performed very well, with only a few events that were misclassified. 
 
-This good separation is also seen in the UMAP space plotted in `umap_After_filtering.html`:
+This separation is also seen in the UMAP space plotted in `umap_After_filtering.html`, as shown below. In the html file, the plot is interactive and you can click on the label to hide the corresponding events from the plot.
 
 ![umap](../_static//umap_after_filtering.png)
 
@@ -99,32 +99,42 @@ Clicking *"Predict"* will then launch the prediction step.
 
 ![train model](../_static//Run_prediction_step.png) 
 
-The prediction should also happen within one minute. The output is stored in a folder called "Prediction" (followed by a time stamp) that is either located in the specified output folder or the CellScanner folder.
+The prediction should also happen within one minute. The output is stored in a folder called "Prediction" (followed by a time stamp) that is either located in the specified output folder or the `CellScanner/cellscanner/scripts` folder.
 For each coculture, the following files are generated (file names start with coculture name): 
 
 - `3D_coculture_predictions_species.html` plots events in a 3D plot spanned by the three selected flow cytometer channels and colors them by species
-- `3D_coculture_predictions_uncertainty.html` is the same with events colored by prediction uncertainty
-- `prediction_counts.csv`, which contains the predicted counts for debris (blank), for each species, and also for the unknown events if uncertainty thresholding was enabled
+- **`prediction_counts.csv`**, which contains the predicted counts for debris (blank), for each species, and also for the unknown events if uncertainty thresholding was enabled
 - `raw_predictions.csv`, which is the fcs file of the coculture extended with prediction results (labels and, if enabled, uncertainties) 
-- `uncertainty_counts.csv`, which lists the number of uncertain events per label if uncertainty thresholding was enabled
 
-In addition, two subfolders are created:
 
-- subfolder `gated` provides counts and a plot on gating if stains were provided for each coculture
-- subfolder `heterogeneity_results` quantifies and visualizes overall and species-specific heterogeneity, also for each coculture 
+In addition, three subfolders are created:
 
-If more than one coculture file was provided, `merged_prediction_counts.csv` will list the counts for each coculture.
+- subfolder `gated` contains 3D plots for different gating categories depending on gating input parameters as well as `raw_gating.csv`, which is the input file with labels resulting from gating appended
+- subfolder `heterogeneity_results` quantifies overall and species-specific heterogeneity, for each coculture separately as well as for all co-cultures together in a merged file called `merged_heterogeneity_results.csv`
+- subfolder `uncertainty_counts` is created when an uncertainty filter was specified and contains two files for each co-culture, namely `3D_coculture_predictions_uncertainty.html` with a 3D plot in which events are colored by uncertainty and `uncertainty_counts.csv`, which lists the number of uncertain events per label 
 
-Below is the result for the six coculture replicates:
+
+If more than one coculture file was provided, **`merged_prediction_counts.csv`** will list the counts in the different categories for each coculture. 
+
+Below is the final result for the six coculture replicates (found in `merged_prediction_counts.csv`):
 
 | Species | Coculure 1 | Coculture 2 | Coculture 3 | Coculture 4 | Coculture 5 | Coculture 6 |
 | ----------- | ----------- | ------- | ----| -----| ---- | ------ | 
-| BT | 144620 | 165580 | 146087 | 147948 | 133500 | 139105 |
-| RI | 70883 | 29756 | 79420 | 65690 | 86624 | 82162 |
-| Blank | 755 | 804 | 767 | 682 | 1563 | 892 |
-| Unknown | 4573 | 3455 | 4300 | 4228 | 28639 | 13516 |
+| BT_debris | 7035.0 | 4779.0 | 4320.0 | 6514.0 | 40316.0 | 19945.0 |
+| **BT_live** | 132000.0 | 152150.0 | 135189.0 | 135168.0 | 111288.0 | 122545.0 |
+| RI_debris | 238.0 | 90.0 | 251.0 | 214.0 | 376.0 | 366.0 |
+| **RI_live** | 76367.0 | 36993.0 | 84986.0 | 71656.0 | 90392.0 | 86118.0 |
+| RI_dead | 957.0 | 1371.0 | 1163.0 | 1002.0 | 895.0 | 867.0 |
+| Blank_debris | 602.0 | 631.0 | 641.0 | 547.0 | 675.0 | 621.0 |
+| Blank_notdead | 40.0 | 74.0 | 29.0 | 34.0 | 179.0 | 87.0 |
+| Unknown | 3592.0 | 3507.0 | 3995.0 | 3413.0 | 6205.0 | 5126.0 |
 
+This table classifies the co-culture events in a number of categories.
+The neural network was trained to distinguish not only species from each other but also from events in the blanks (which do not contain cells). Events labeled as `blank` are therefore co-culture events that the neural network thought are too similar to events encountered in blanks. 
+`debris` refers to events filtered out after classification because their signal was too weak in the specified channel (here FITC-A) and `dead` refers to events with a strong red signal that means that the cell membrane was compromised. Both categories only appear if the corresponding stains were specified.
+Finally, `unknown` are events that could not be clearly classified by the neural network as a species or a blank. 
+The total cell count can be obtained by summing the dead and live cell counts. Of note, no dead Bacteroides cells were detected with the lenient dead-cell threshold specified and therefore the live cell count is equal to the total cell count in this case.
 
-At 50 hours, the coculture is dominated by *Bacteroides thetaiotaomicron* according to CellScanner. Note that we computed viable cell counts since we filtered out dead cells using the propidium iodide stain.
+Thus, at 50 hours, the coculture is dominated by *Bacteroides thetaiotaomicron* according to CellScanner. 
 
 ![cell counts](../_static//cell_count_plot.png)
