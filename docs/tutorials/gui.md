@@ -62,10 +62,10 @@ The plot below illustrates the gating carried out. FITC and PerCP  refer to the 
 
 Model training should be fast (within one minute). 
 Model performance files will be stored in a sub-folder in your specified output folder (if you did not specify one, then in the CellScanner folder, in `cellscanner/scripts`). 
-The sub-folder name starts with `working_files` and ends with a time stamp. 
-It contains the input files and another folder called `model`, in which you will find a number of files encoding the trained neural network, a file called `model_statistics.csv` and two html files, `umap_Before_filtering.html` and `umap_After_filtering.html`, which will open in your browser when clicked. 
-The first shows a UMAP projection before and the second one after filtering. 
-The `model_statistics.csv` file contains information about classification performance, including accuracy, precision, recall, F1 score and the confusion matrix.
+The sub-folder name starts with `working_files` and ends with a time stamp. Please note that if training is rerun, training result files can be overwritten if no new output folder is specified.
+The `working_files` folder contains the input files and another folder called `model`, in which you will find a number of files encoding the trained neural network, a file called `model_statistics.csv` and two html files, `umap_Before_filtering.html` and `umap_After_filtering.html`, which will open in your browser when clicked. 
+The first shows a UMAP projection before and the second one after filtering of events. 
+The **`model_statistics.csv` file contains information about classification performance, including accuracy, precision, recall, F1 score and the confusion matrix**.
 
 This is the confusion matrix for our tutorial files:
 
@@ -102,8 +102,7 @@ Clicking *"Predict"* will then launch the prediction step.
 
 ![train model](../_static//Run_prediction_step.png) 
 
-The prediction should also happen within one minute. The output is stored in a folder called "Prediction" (followed by a time stamp) that is either located in the specified output folder or the `CellScanner/cellscanner/scripts` folder.
-For each coculture, the following files are generated (file names start with coculture name): 
+The prediction should also happen within one minute. The output is stored in a folder called "Prediction" (followed by a time stamp) that is either located in the specified output folder or the `CellScanner/cellscanner/scripts` folder. For each coculture, the following files are generated (file names start with coculture name): 
 
 - `3D_coculture_predictions_species.html` plots events in a 3D plot spanned by the three selected flow cytometer channels and colors them by species
 - **`prediction_counts.csv`**, which contains the predicted counts for debris (blank), for each species, and also for the unknown events if uncertainty thresholding was enabled
@@ -136,6 +135,8 @@ This table classifies the co-culture events in a number of categories.
 The neural network was trained to distinguish not only species from each other but also from events in the blanks (which do not contain cells). Events labeled as `blank` are therefore co-culture events that the neural network thought are too similar to events encountered in blanks. 
 `debris` refers to events filtered out after classification because their signal was too weak in the specified channel (here FITC-A) and `dead` refers to events with a strong red signal that means that the cell membrane was compromised. Both categories only appear if the corresponding stains were specified.
 Finally, `unknown` are events that could not be clearly classified by the neural network as a species or a blank. 
+The order of these filters is as follows: only events that are not unknown can be classified as debris and only events not classified as debris can be classified as live or dead. The total count of events in a coculture sample is independent of the specified filters.
+
 The total cell count can be obtained by summing the dead and live cell counts. Of note, no dead Bacteroides cells were detected with the lenient dead-cell threshold specified here and therefore the live cell count is equal to the total cell count in this case.
 
 Thus, at 50 hours, the coculture is dominated by *Bacteroides thetaiotaomicron* according to CellScanner. 
