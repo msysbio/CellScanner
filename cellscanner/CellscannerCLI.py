@@ -12,11 +12,6 @@ import argparse
 import fcsparser
 from collections import defaultdict
 
-# Load CellScanner features
-from scripts.run_prediction import predict
-from scripts.apply_umap import process_files
-from scripts.nn import prepare_for_training, train_neural_network
-from scripts.helpers import get_app_dir, time_based_dir, load_model_from_files, merge_prediction_results, Stain
 
 class CellScannerCLI():
 
@@ -30,6 +25,9 @@ class CellScannerCLI():
 
         # Load config file
         conf = load_yaml(args.config)
+
+        # Load CellScanner features
+        from scripts.helpers import get_app_dir,  load_model_from_files
 
         # Output dir
         outdir = conf.get("output_directory").get("path")
@@ -133,6 +131,8 @@ class CellScannerCLI():
         """
         A wrapper for the main training model - related CellScanner functions.
         """
+        from scripts.apply_umap import process_files
+        from scripts.nn import prepare_for_training, train_neural_network
         print("\nAbout to preprocess input files.")
         cleaned_data = process_files(
             n_events = self.events, umap_n_neighbors=self.n_neighbors,
@@ -168,6 +168,10 @@ class CellScannerCLI():
         In case where several co-culture files have been provided (samples), CellScanner makes its prediction per sample
         and in the end merges them in a single file.
         """
+
+        from scripts.helpers import time_based_dir, merge_prediction_results
+        from scripts.run_prediction import predict
+
         print("About to start predicting co-culture profiles.")
 
         if not all([self.model, self.scaler, self.le]):
@@ -375,6 +379,7 @@ def build_stain(stain: str, channel: str, sign: str, value: int):
     or ``higher_than``, ``lower_than`` in the CLI
     :param value: Threshold of the channel value
     """
+    from scripts.helpers import Stain
     # Check if all stain params are there
     if not all([sign, value]) and channel is not None:
         missing = [k for k, v in {"channel": channel, "sign": sign, "value": value}.items() if v is None]
