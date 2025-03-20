@@ -173,8 +173,11 @@ class ImportFilePanel(QWidget):
                 blank_files.append(dest_file)
 
             # Keep the numeric columns to be used in the TrainModelPanel in case user applies line gating
-            _, _, numeric_columns = load_fcs_file(original_files)
-            self.numeric_colums_set = set(numeric_columns)
+            _, _, numeric_columns, meta = load_fcs_file(original_files)
+            channels_df = meta["_channels_"]
+            channels_df["long_channel"] = channels_df.apply(lambda row: f"{row['$PnN']} [{row['$PnS']}]" if row["$PnN"] != row["$PnS"] else row["$PnN"], axis=1)
+            self.channels = set(channels_df["long_channel"])
+            self.numeric_columns_set = set(numeric_columns)
 
             # Blank filenames
             self.blank_files = blank_files

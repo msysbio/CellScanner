@@ -64,12 +64,18 @@ def process_file(file: str, species_name: str, n_events: int, stain_1: Stain, st
 
             # Apply gating for stain 1 if channel is not None
             if isinstance(stain_1, Stain) and stain_1.channel:
-                df = df[gated_df["dead"] == False]
+                gating_condition = gated_df["dead"] == False
+                gating_condition = gating_condition.reindex(df.index, fill_value=False)
+                df = df[gating_condition]
+                # df = df[gated_df["dead"] == False]
                 f.write(f"number of entries after gating for stain1: {df.shape}\n")
 
             # Apply gating for stain 2 if channel is not None
             if isinstance(stain_2, Stain) and stain_2.channel:
-                df = df[gated_df["cell"] == True]
+                gating_condition = gated_df["cell"] == True
+                gating_condition = gating_condition.reindex(df.index, fill_value=False)
+                df = df[gating_condition]
+                # df = df[gated_df["cell"] == True]
                 f.write(f"number of entries after gating for stain2: {df.shape}\n")
 
     # Keep a subset of the entries for the training part

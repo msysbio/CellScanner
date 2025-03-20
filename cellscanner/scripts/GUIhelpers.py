@@ -197,7 +197,8 @@ class GatingMixin:
             if is_checked and len(self.file_panel.blank_files) > 0:
                 # Update all stain selectors
                 for selector in self.stain_selectors:
-                    selector.set_items(self.file_panel.numeric_colums_set)
+                    # selector.set_items(self.file_panel.numeric_columns_set)
+                    selector.set_items(self.file_panel.channels)
 
         for selector in self.stain_selectors:
             selector.label.setVisible(is_checked)
@@ -208,7 +209,7 @@ class GatingMixin:
         try:
             self.new_stain_button.setVisible(is_checked)
         except:
-            print("No need for extra stain at the training step")
+            print("No need for extra stain at the training step besides the two main ones (SYBR and PI).")
             pass
 
     def get_host_class_name(self):
@@ -348,7 +349,7 @@ def load_fcs_file(fcss):
     sample_numeric_columns = {}
 
     for fcs in fcss:
-        _, data_df = fcsparser.parse(fcs, reformat_meta=True)
+        meta, data_df = fcsparser.parse(fcs, reformat_meta=True)
 
         # Drop the 'Time' column if it exists
         if 'Time' in data_df.columns:
@@ -361,7 +362,7 @@ def load_fcs_file(fcss):
             sample_numeric_columns[sample_file_basename] = numeric_columns
             sample_to_df[sample] = data_df
 
-    return sample_to_df, sample_numeric_columns, numeric_columns
+    return sample_to_df, sample_numeric_columns, numeric_columns, meta
 
 
 def button_style(
