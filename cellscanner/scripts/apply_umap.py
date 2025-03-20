@@ -7,13 +7,15 @@ are kept for the training of the Neural Network step.
 """
 import os
 import umap
-import fcsparser
 import pandas as pd
 import numpy as np
+import fcsparser
 from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import NearestNeighbors
+
 from .nn import prepare_for_training
-from .helpers import Stain, get_stains_from_panel, apply_gating
+from .helpers import Stain, apply_gating
+from .GUIhelpers import get_stains_from_panel
 from .illustrations import umap_plot
 from typing import TYPE_CHECKING
 
@@ -39,12 +41,12 @@ def process_file(file: str, species_name: str, n_events: int, stain_1: Stain, st
     if 'Time' in df.columns:
         df = df.drop(columns=['Time'])  # Remove Time column
 
-    print("Processing file: ", species_name)
-
-    if stain_1 is None and stain_2 is None:
-        print("No gating for the training step.")
+    if stain_1.channel is None and stain_2.channel is None:
+        print(f"No gating, no further processing before the training step for file: {file}")
+        print(f"File is probably a blank. Is it? {species_name}")
 
     else:
+        print(f"Gating file: {file}")
         # Apply gating
         with open(os.path.join(model_dir, "gating_input_data.txt"), "w") as f:
 
@@ -55,8 +57,10 @@ def process_file(file: str, species_name: str, n_events: int, stain_1: Stain, st
             # Apply gating process
             try:
                 gated_df, _ = apply_gating(df, stain_1, stain_2)
-            except ValueError as e:
-                raise ValueError(f"Error processing species {species_name}: {e}") from e
+                print(f"Gating performed fine for file: {file}")
+            except Exception as e:
+                # raise ValueError(f"Error applying gating for species {species_name}, file {file}: {e}") from e
+                raise e
 
             # Print and write columns to the file
             f.write(f"df.columns: {df.columns.tolist()}\n")
@@ -64,7 +68,7 @@ def process_file(file: str, species_name: str, n_events: int, stain_1: Stain, st
 
             # Apply gating for stain 1 if channel is not None
             if isinstance(stain_1, Stain) and stain_1.channel:
-                gating_condition = gated_df["dead"] == False
+                gating_condition = gated_df["cell"] == False
                 gating_condition = gating_condition.reindex(df.index, fill_value=False)
                 df = df[gating_condition]
                 # df = df[gated_df["dead"] == False]
@@ -72,7 +76,7 @@ def process_file(file: str, species_name: str, n_events: int, stain_1: Stain, st
 
             # Apply gating for stain 2 if channel is not None
             if isinstance(stain_2, Stain) and stain_2.channel:
-                gating_condition = gated_df["cell"] == True
+                gating_condition = gated_df["dead"] == True
                 gating_condition = gating_condition.reindex(df.index, fill_value=False)
                 df = df[gating_condition]
                 # df = df[gated_df["cell"] == True]
@@ -164,7 +168,8 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
                     )
                 )
             except Exception as e:
-                raise Exception(f"Error while processing species file {species_name}: {e}") from e  # Corrected
+                # raise Exception(f"Error while processing species file {species_name}: {e}") from e  # Corrected
+                raise e
         all_species_dataframes.append(species_dataframes)
 
     # Process blanks
@@ -180,7 +185,8 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
                 )
             )
         except Exception as e:
-            raise(f"Error processing blank file {blank_file}: {e}") from e
+            raise e
+            # raise(f"Error processing blank file {blank_file}: {e}") from e
 
     # Combine data
     print("Build unified dataframe")
