@@ -24,7 +24,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject
 import os
 
 from .run_prediction import predict
-from .helpers import time_based_dir, merge_prediction_results
+from .helpers import time_based_dir, merge_prediction_results, get_channels
 from .GUIhelpers import (
     button_style, _GuiMessages, AxisSelector, LiveDeadDebrisSelectors, GatingMixin, GatingCheckBox,
     iterate_stains, load_fcs_file
@@ -173,14 +173,17 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
 
                 # Populate the combo boxes with the numeric column names
                 self.numeric_columns_set = set(numeric_columns)
+                self.channels = get_channels(meta["_channels_"])
 
                 # Update all axis selectors
                 for selector in self.axis_selectors:
-                    selector.set_items(self.numeric_columns_set)
+                    # selector.set_items(self.numeric_columns_set)
+                    selector.set_items(self.channels)
 
                 # Update all stain selectors
                 for selector in self.stain_selectors:
-                    selector.set_items(self.numeric_columns_set)
+                    # selector.set_items(self.numeric_columns_set)
+                    selector.set_items(self.channels)
 
                 self.channels_on_stain_buttons()
 

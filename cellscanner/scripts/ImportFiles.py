@@ -20,7 +20,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLin
     QFileDialog, QInputDialog, QMessageBox
 
 
-from .helpers import get_app_dir, time_based_dir, load_model_from_files
+from .helpers import get_app_dir, time_based_dir, load_model_from_files, get_channels
 from .GUIhelpers import button_style, LabeledSpinBox, _GuiMessages, load_fcs_file
 
 """
@@ -174,9 +174,10 @@ class ImportFilePanel(QWidget):
 
             # Keep the numeric columns to be used in the TrainModelPanel in case user applies line gating
             _, _, numeric_columns, meta = load_fcs_file(original_files)
-            channels_df = meta["_channels_"]
-            channels_df["long_channel"] = channels_df.apply(lambda row: f"{row['$PnN']} [{row['$PnS']}]" if row["$PnN"] != row["$PnS"] else row["$PnN"], axis=1)
-            self.channels = set(channels_df["long_channel"])
+            # channels_df = meta["_channels_"]
+            # channels_df["long_channel"] = channels_df.apply(lambda row: f"{row['$PnN']} [{row['$PnS']}]" if row["$PnN"] != row["$PnS"] else row["$PnN"], axis=1)
+            # self.channels = set(channels_df["long_channel"])
+            self.channels = get_channels(meta["_channels_"])
             self.numeric_columns_set = set(numeric_columns)
 
             # Blank filenames

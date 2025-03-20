@@ -262,6 +262,8 @@ class WorkerProcessFiles(QObject):
             self.TrainModelPanel = process_files(self.TrainModelPanel)
             self.finished_signal.emit()  # Emit the finished signal when done
         except Exception as e:
-            self.error_signal.emit(f"Error during prediction: {str(e)}")
+            error_message = str(e)  # Extract only the error message
+            self.error_signal.emit(error_message)  # Emit it to the GUI
+            # self.error_signal.emit(f"Error during prediction: {str(e)}")
             self.TrainModelPanel.thread.quit()
 

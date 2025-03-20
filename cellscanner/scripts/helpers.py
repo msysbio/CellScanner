@@ -81,39 +81,14 @@ def create_file_path(output_dir, sample, name, extension):
     return os.path.join(output_dir, f"{name}.{extension}")
 
 
-def get_stains_from_panel(Panel):
+def get_channels(channels_df):
     """
-    Build Stain instances for the two main stain types of living/dead and cells/not cells cases.
-    In this case, no label is part of the Stain instance.
-    Function to be used only in the GUI framework.
+    : channels_df: A pd.DataFrame part of the fcsparser loading function
 
-    Arguments:
-        Panel (:class:`PredictionPanel` | :class:`TrainModelPanel`):
-    Returns:
-        stain1 (Stain)
-        stain2 (Stain)
     """
-    # Stain 1
-    stain_1 = Panel.stain1_selector.combo.currentText()  # It should be the column name
-    if stain_1 != "Not applicable":
-        stain1_channel = stain_1
-        stain1_relation = Panel.stain1_selector.relation.currentText()
-        stain1_threshold = float(Panel.stain1_selector.threshold.text())
-        stain1 = Stain(stain1_channel, stain1_relation, stain1_threshold)
-    else:
-        stain1 = None
-
-    # Stain 2
-    stain_2 = Panel.stain2_selector.combo.currentText()  # It should be the column name
-    if stain_2 != "Not applicable":
-        stain2_channel = stain_2
-        stain2_relation = Panel.stain2_selector.relation.currentText()
-        stain2_threshold = float(Panel.stain2_selector.threshold.text()) if Panel.stain2_selector.threshold.text() else None
-        stain2 = Stain(stain2_channel, stain2_relation, stain2_threshold)
-    else:
-        stain2 = None
-
-    return stain1, stain2
+    channels_df["long_channel"] = channels_df.apply(lambda row: f"{row['$PnN']} [{row['$PnS']}]" if row["$PnN"] != row["$PnS"] else row["$PnN"], axis=1)
+    channels = set(channels_df["long_channel"])
+    return channels
 
 
 def stain_sannity_check(df, label, channel, sign, threshold):
@@ -170,41 +145,49 @@ def apply_gating(data_df: pd.DataFrame,
     if predictions_column is not None:
         gated_data_df['predictions'] = predictions_column
 
-    if stain1 is not None:
+    if stain1.channel is not None:
         """ STAIN FOR CELLS / DEBRIS (sybr green) """
         if stain1.channel is not None and stain1.channel != "Not applicable":
 
             # Initialize the 'state' column with 'not dead'
             gated_data_df['cell'] = False
+
             # Apply gating based on the first stain (live/dead)
             if stain1.sign in ['>', 'greater_than']:
                 gated_data_df.loc[gated_data_df[stain1.channel] > stain1.value, 'cell'] = True
+
             elif stain1.sign in ['<', 'less_than']:
                 gated_data_df.loc[gated_data_df[stain1.channel] < stain1.value, 'cell'] = True
+
             # Sannity check
             try:
                 stain_sannity_check(gated_data_df, "cell", stain1.channel, stain1.sign, stain1.value)
                 all_labels.append("cell")
-            except ValueError as e:
-                raise ValueError(f"Gating failed for stain1: {e}") from e  # Preserve original traceback
 
-    if stain2 is not None:
+            except Exception as e:
+                raise ValueError(f"Gating failed for stain1: {stain1.channel}") from e  # Preserve original traceback
+
+    if stain2.channel is not None:
         """ STAIN FOR LIVE / DEAD (PI) """
         if stain2.channel is not None and stain2.channel != "Not applicable":
 
             # Initialize the 'state' column with 'not dead'
             gated_data_df['dead'] = False
+
             # Apply gating based on the first stain (live/dead)
             if stain2.sign in ['>', 'greater_than']:
                 gated_data_df.loc[gated_data_df[stain2.channel] > stain2.value, 'dead'] = True
+
             elif stain2.sign in ['<', 'less_than']:
                 gated_data_df.loc[gated_data_df[stain2.channel] < stain2.value, 'dead'] = True
+
             # Sannity check
             try:
                 stain_sannity_check(gated_data_df, "dead", stain2.channel, stain2.sign, stain2.value)
                 all_labels.append("dead")
-            except ValueError as e:
-                raise ValueError(f"Gating failed for stain2: {e}") from e  # Preserve original traceback
+
+            except Exception as e:
+                raise (f"Sannity check failed for stain2: {stain2.channel}") from e  # Preserve original traceback
 
     # Apply gating on extra stains
     if extra_stains is not None:
