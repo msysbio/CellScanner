@@ -24,7 +24,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject
 import os
 
 from .run_prediction import predict
-from .helpers import time_based_dir, merge_prediction_results
+from .helpers import time_based_dir, merge_prediction_results, get_channels
 from .GUIhelpers import (
     button_style, _GuiMessages, AxisSelector, LiveDeadDebrisSelectors, GatingMixin, GatingCheckBox,
     iterate_stains, load_fcs_file
@@ -161,7 +161,7 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
 
             try:
                 # Load fcs files
-                sample_to_df, sample_numeric_columns, numeric_columns = load_fcs_file(coculture_filepath)
+                sample_to_df, sample_numeric_columns, numeric_columns, meta = load_fcs_file(coculture_filepath)
 
                 # Show files selected in the button
                 self.choose_coculture_file_button.setText(",".join(sample_to_df.keys()))  # Display only the filename, not the full path
@@ -172,15 +172,18 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
                     self._on_error(_GuiMessages.COLUMN_NAMES_ERROR)
 
                 # Populate the combo boxes with the numeric column names
-                self.numeric_colums_set = set(numeric_columns)
+                self.numeric_columns_set = set(numeric_columns)
+                self.channels = get_channels(meta["_channels_"])
 
                 # Update all axis selectors
                 for selector in self.axis_selectors:
-                    selector.set_items(self.numeric_colums_set)
+                    # selector.set_items(self.numeric_columns_set)
+                    selector.set_items(self.channels)
 
                 # Update all stain selectors
                 for selector in self.stain_selectors:
-                    selector.set_items(self.numeric_colums_set)
+                    # selector.set_items(self.numeric_columns_set)
+                    selector.set_items(self.channels)
 
                 self.channels_on_stain_buttons()
 
@@ -277,7 +280,7 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
                         component = stain_layout.itemAt(j).widget()
                         if isinstance(component, QComboBox):
                             if not any(component.itemText(i) == '>' for i in range(component.count())):
-                                component.addItems(self.numeric_colums_set)
+                                component.addItems(self.numeric_columns_set)
 
 
 class WorkerPredict(QObject):

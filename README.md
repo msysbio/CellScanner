@@ -28,7 +28,7 @@ To run CellScanner with its GUI, you may now run:
 # Always remember to activate your conda environment, if you set one for CellScanner
 conda activate cellscanner
 # If `python` returns an error message that is not there, try with `python3` instead
-python Cellscanner.py
+python cellscanner/Cellscanner.py
 ```
 
 This will pop-up CellScanner where you can now import your data, fill in your training parameters and 
@@ -90,7 +90,7 @@ Once your configuration file is ready, you may run CellScanner CLI :
 
 ```bash
 conda activate cellscanner
-python CellscannerCLI.py --config config.yml
+python cellscanner/CellscannerCLI.py --config config.yml
 ```
 
 

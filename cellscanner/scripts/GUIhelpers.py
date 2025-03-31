@@ -3,6 +3,7 @@ A set of classes to support the GUI.
 
 """
 import os
+import re
 import fcsparser
 import numpy as np
 
@@ -10,6 +11,8 @@ from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QComboBox, QLabel, QLineEdit, QDoubleSpinBox,
     QSpinBox, QVBoxLayout, QCheckBox
 )
+
+from .helpers import Stain
 
 class AxisSelector(QWidget):
     """
@@ -197,7 +200,8 @@ class GatingMixin:
             if is_checked and len(self.file_panel.blank_files) > 0:
                 # Update all stain selectors
                 for selector in self.stain_selectors:
-                    selector.set_items(self.file_panel.numeric_colums_set)
+                    # selector.set_items(self.file_panel.numeric_columns_set)
+                    selector.set_items(self.file_panel.channels)
 
         for selector in self.stain_selectors:
             selector.label.setVisible(is_checked)
@@ -208,7 +212,7 @@ class GatingMixin:
         try:
             self.new_stain_button.setVisible(is_checked)
         except:
-            print("No need for extra stain at the training step")
+            print("No need for extra stain at the training step besides the two main ones (SYBR and PI).")
             pass
 
     def get_host_class_name(self):
@@ -249,8 +253,6 @@ class LiveDeadDebrisSelectors:
 
     """
     def basic_stains(self):
-
-
 
         # Pair of basic stains
         self.stain1_selector = StainSelector("Staining all cells (e.g. SYBR/DAPI):", _GuiMessages.TP_STAIN_1, "cell", self)
@@ -334,6 +336,45 @@ class _GuiMessages:
     )
 
 
+def get_stains_from_panel(Panel):
+    """
+    Build Stain instances for the two main stain types of living/dead and cells/not cells cases.
+    In this case, no label is part of the Stain instance.
+    Function to be used only in the GUI framework.
+
+    Arguments:
+        Panel (:class:`PredictionPanel` | :class:`TrainModelPanel`):
+    Returns:
+        stain1 (Stain)
+        stain2 (Stain)
+    """
+    # Stain 1
+    stain_1 = Panel.stain1_selector.combo.currentText()  # It should be the column name
+    if stain_1 != "Not applicable":
+        match = re.search(r"\[(.*?)\]", stain_1)   # In case we chose a channel with a second name in brackets
+        stain1_channel = match.group(1) if match else stain_1
+        stain1_relation = Panel.stain1_selector.relation.currentText()
+        stain1_threshold = float(Panel.stain1_selector.threshold.text())
+        stain1 = Stain(stain1_channel, stain1_relation, stain1_threshold)
+    else:
+        stain1 = Stain(channel=None, sign=None, value=None)
+
+    # Stain 2
+    stain_2 = Panel.stain2_selector.combo.currentText()  # It should be the column name
+    if stain_2 != "Not applicable":
+
+        stain2_relation = Panel.stain2_selector.relation.currentText()
+        stain2_threshold = float(Panel.stain2_selector.threshold.text()) if Panel.stain2_selector.threshold.text() else None
+        stain2 = Stain(stain2_channel, stain2_relation, stain2_threshold)
+    else:
+        stain2 = Stain(channel=None, sign=None, value=None)
+
+    return stain1, stain2
+
+def extact_channel(long_channel):
+    match = re.search(r"\[(.*?)\]", long_channel)   # In case we chose a channel with a second name in brackets
+    channel = match.group(1) if match else long_channel
+    return channel
 
 
 def load_fcs_file(fcss):
@@ -348,7 +389,7 @@ def load_fcs_file(fcss):
     sample_numeric_columns = {}
 
     for fcs in fcss:
-        _, data_df = fcsparser.parse(fcs, reformat_meta=True)
+        meta, data_df = fcsparser.parse(fcs, reformat_meta=True)
 
         # Drop the 'Time' column if it exists
         if 'Time' in data_df.columns:
@@ -361,7 +402,7 @@ def load_fcs_file(fcss):
             sample_numeric_columns[sample_file_basename] = numeric_columns
             sample_to_df[sample] = data_df
 
-    return sample_to_df, sample_numeric_columns, numeric_columns
+    return sample_to_df, sample_numeric_columns, numeric_columns, meta
 
 
 def button_style(

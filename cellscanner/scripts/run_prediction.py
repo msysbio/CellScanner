@@ -7,7 +7,8 @@ from scipy.stats import entropy
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics import pairwise_distances
 
-from .helpers import create_file_path, get_stains_from_panel, apply_gating, save_gating_results
+from .helpers import create_file_path, apply_gating, save_gating_results
+from .GUIhelpers import get_stains_from_panel, extact_channel
 from .illustrations import species_plot, uncertainty_plot, heterogeneity_pie_chart, heterogeneity_bar_plot, create_color_map
 
 # Main function to be called from the worker
@@ -32,10 +33,11 @@ def predict(PredictionPanel=None, **kwargs):
 
         data_df = PredictionPanel.data_df
         output_dir = PredictionPanel.predict_dir
+        print(PredictionPanel.x_axis_selector.combo.currentText())
+        x_axis_combo = extact_channel(PredictionPanel.x_axis_selector.combo.currentText())
+        y_axis_combo = extact_channel(PredictionPanel.y_axis_selector.combo.currentText())
+        z_axis_combo = extact_channel(PredictionPanel.z_axis_selector.combo.currentText())
 
-        x_axis_combo = PredictionPanel.x_axis_selector.combo.currentText()
-        y_axis_combo = PredictionPanel.y_axis_selector.combo.currentText()
-        z_axis_combo = PredictionPanel.z_axis_selector.combo.currentText()
         gating = PredictionPanel.gating_checkbox.isChecked()
         sample = PredictionPanel.sample
 
