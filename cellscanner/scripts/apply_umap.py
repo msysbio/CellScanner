@@ -170,6 +170,7 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
             except Exception as e:
                 # raise Exception(f"Error while processing species file {species_name}: {e}") from e  # Corrected
                 raise e
+
         all_species_dataframes.append(species_dataframes)
 
     # Process blanks

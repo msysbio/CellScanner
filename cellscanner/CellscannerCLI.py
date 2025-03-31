@@ -133,6 +133,7 @@ class CellScannerCLI():
         """
         from scripts.apply_umap import process_files
         from scripts.nn import prepare_for_training, train_neural_network
+
         print("\nAbout to preprocess input files.")
         cleaned_data = process_files(
             n_events = self.events, umap_n_neighbors=self.n_neighbors,
@@ -168,7 +169,6 @@ class CellScannerCLI():
         In case where several co-culture files have been provided (samples), CellScanner makes its prediction per sample
         and in the end merges them in a single file.
         """
-
         from scripts.helpers import time_based_dir, merge_prediction_results
         from scripts.run_prediction import predict
 
@@ -380,6 +380,7 @@ def build_stain(stain: str, channel: str, sign: str, value: int):
     :param value: Threshold of the channel value
     """
     from scripts.helpers import Stain
+
     # Check if all stain params are there
     if not all([sign, value]) and channel is not None:
         missing = [k for k, v in {"channel": channel, "sign": sign, "value": value}.items() if v is None]

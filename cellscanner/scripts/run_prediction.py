@@ -37,6 +37,7 @@ def predict(PredictionPanel=None, **kwargs):
         x_axis_combo = extact_channel(PredictionPanel.x_axis_selector.combo.currentText())
         y_axis_combo = extact_channel(PredictionPanel.y_axis_selector.combo.currentText())
         z_axis_combo = extact_channel(PredictionPanel.z_axis_selector.combo.currentText())
+
         gating = PredictionPanel.gating_checkbox.isChecked()
         sample = PredictionPanel.sample
 
