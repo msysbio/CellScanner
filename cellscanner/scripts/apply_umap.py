@@ -118,15 +118,14 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
             "working_directory": TrainPanel.file_panel.working_directory,
         }
 
-        gating = TrainPanel.gating_checkbox.isChecked()
-
-        # if gating:
+        # NOTE (Haris Zafeiropoulos, 2025-03-31):
+        # If gating is not been clicked at all, stain_1 and stain_2 will be blank stains
         stain_1, stain_2 = get_stains_from_panel(TrainPanel)
-        # else:
-        #     stain_1 = stain_2 = Stain(channel=None, sign=None, value=None)
+
         gui = True
 
     else:
+
         # Read parameters from kwargs
         required_keys = [
             "n_events", "umap_n_neighbors", "umap_min_dist",
