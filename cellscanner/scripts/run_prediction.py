@@ -33,7 +33,7 @@ def predict(PredictionPanel=None, **kwargs):
 
         data_df = PredictionPanel.data_df
         output_dir = PredictionPanel.predict_dir
-        print(PredictionPanel.x_axis_selector.combo.currentText())
+
         x_axis_combo = extact_channel(PredictionPanel.x_axis_selector.combo.currentText())
         y_axis_combo = extact_channel(PredictionPanel.y_axis_selector.combo.currentText())
         z_axis_combo = extact_channel(PredictionPanel.z_axis_selector.combo.currentText())

@@ -120,11 +120,12 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
 
         gating = TrainPanel.gating_checkbox.isChecked()
 
-        if gating:
-            stain_1, stain_2 = get_stains_from_panel(TrainPanel)
-        else:
-            stain_1, stain_2 = None, None
+        # if gating:
+        stain_1, stain_2 = get_stains_from_panel(TrainPanel)
+        # else:
+        #     stain_1 = stain_2 = Stain(channel=None, sign=None, value=None)
         gui = True
+
     else:
         # Read parameters from kwargs
         required_keys = [

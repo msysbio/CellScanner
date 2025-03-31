@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QSpinBox, QVBoxLayout, QCheckBox
 )
 
-from .helpers import Stain
+from .helpers import Stain, NOT_APPLICABLE
 
 class AxisSelector(QWidget):
     """
@@ -43,7 +43,7 @@ class StainSelector(QWidget):
         self.label = QLabel(label_text, self)
         self.combo = QComboBox(self)
         self.combo.setToolTip(tooltip_text)
-        self.combo.addItem("Not applicable")
+        self.combo.addItem(NOT_APPLICABLE)
 
         self.relation = QComboBox(self)
         self.relation.addItems(['>', '<'])
@@ -62,7 +62,7 @@ class StainSelector(QWidget):
 
     def set_items(self, items):
         self.combo.clear()
-        self.combo.addItem("Not applicable")  # Keep default
+        self.combo.addItem(NOT_APPLICABLE)  # Keep default
         self.combo.addItems(items)
 
 
@@ -232,7 +232,7 @@ class GatingCheckBox:
         try:
             self.predict_panel_layout.addWidget(self.gating_checkbox)
         except:
-            self.train_gating_layout.addWidget(self.gating_checkbox)
+            self.train_panel_layout.addWidget(self.gating_checkbox)
 
         # Add message for strain thresholds
         self.thresholds_layout = QHBoxLayout()
@@ -244,7 +244,7 @@ class GatingCheckBox:
         try:
             self.predict_panel_layout.addLayout(self.thresholds_layout)
         except:
-            self.train_gating_layout.addLayout(self.thresholds_layout)
+            self.train_panel_layout.addLayout(self.thresholds_layout)
 
 
 class LiveDeadDebrisSelectors:
@@ -262,8 +262,8 @@ class LiveDeadDebrisSelectors:
             self.predict_panel_layout.addWidget(self.stain1_selector)
             self.predict_panel_layout.addWidget(self.stain2_selector)
         except:
-            self.train_gating_layout.addWidget(self.stain1_selector)
-            self.train_gating_layout.addWidget(self.stain2_selector)
+            self.train_panel_layout.addWidget(self.stain1_selector)
+            self.train_panel_layout.addWidget(self.stain2_selector)
 
         self.stain_selectors = [
             self.stain1_selector,
@@ -349,24 +349,34 @@ def get_stains_from_panel(Panel):
         stain2 (Stain)
     """
     # Stain 1
+
     stain_1 = Panel.stain1_selector.combo.currentText()  # It should be the column name
-    if stain_1 != "Not applicable":
+
+    if stain_1 != NOT_APPLICABLE:
+
         match = re.search(r"\[(.*?)\]", stain_1)   # In case we chose a channel with a second name in brackets
         stain1_channel = match.group(1) if match else stain_1
         stain1_relation = Panel.stain1_selector.relation.currentText()
         stain1_threshold = float(Panel.stain1_selector.threshold.text())
+
         stain1 = Stain(stain1_channel, stain1_relation, stain1_threshold)
+
     else:
+
         stain1 = Stain(channel=None, sign=None, value=None)
 
     # Stain 2
     stain_2 = Panel.stain2_selector.combo.currentText()  # It should be the column name
-    if stain_2 != "Not applicable":
+    if stain_2 != NOT_APPLICABLE:
 
+        match = re.search(r"\[(.*?)\]", stain_2)
+        stain2_channel = match.group(1) if match else stain_2
         stain2_relation = Panel.stain2_selector.relation.currentText()
         stain2_threshold = float(Panel.stain2_selector.threshold.text()) if Panel.stain2_selector.threshold.text() else None
         stain2 = Stain(stain2_channel, stain2_relation, stain2_threshold)
+
     else:
+
         stain2 = Stain(channel=None, sign=None, value=None)
 
     return stain1, stain2
