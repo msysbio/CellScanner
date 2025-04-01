@@ -86,6 +86,7 @@ class ImportFilePanel(QWidget):
 
         # Button for output dir
         if os.getcwd() != "/app":
+
             self.output_dir = get_app_dir()
             outdir_layout = QHBoxLayout()
             self.output_dir_button = QPushButton("Set output directory", self)
@@ -94,6 +95,9 @@ class ImportFilePanel(QWidget):
             self.output_dir_button.clicked.connect(self.select_directory)
             outdir_layout.addWidget(self.output_dir_button)
             self.layout.addLayout(outdir_layout)
+
+        else:
+            self.output_dir = "/csFiles"
 
 
     def add_species(self):

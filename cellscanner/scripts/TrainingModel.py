@@ -33,7 +33,7 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
 
         super().__init__(parent)
         self.file_panel = file_panel
-        self.layout = QVBoxLayout(self)
+        self.train_panel_layout = QVBoxLayout(self)
 
         # Group box for "File Settings"
         self.file_settings_group = QGroupBox("File Settings", self)
@@ -58,7 +58,7 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
 
         # Add the event_layout into file_settings_layout, then add file_settings_group to the main layout.
         file_settings_layout.addLayout(event_layout)
-        self.layout.addWidget(self.file_settings_group)
+        self.train_panel_layout.addWidget(self.file_settings_group)
 
         # -----------------------------------------------------------
 
@@ -87,7 +87,7 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
         umap_layout.addWidget(self.umap_mindist_combo)
 
         # Add the UMAP group box to the main layout
-        self.layout.addWidget(self.umap_group)
+        self.train_panel_layout.addWidget(self.umap_group)
 
         # -----------------------------------------------------------
 
@@ -119,7 +119,7 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
         nn_layout.addWidget(self.nn_nonblank_combo)
 
         # Add the NN group box to the main layout
-        self.layout.addWidget(self.nn_group)
+        self.train_panel_layout.addWidget(self.nn_group)
 
         # -----------------------------------------------------------
 
@@ -146,13 +146,13 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
         model_settings_layout.addWidget(self.patience_combo)
 
         # Add the QGroupBox to your main layout
-        self.layout.addWidget(self.model_settings_group)
+        self.train_panel_layout.addWidget(self.model_settings_group)
 
         # -----------------------------------------------------------
 
         # Gating option at the training step
-        self.train_gating = QGroupBox("Line gating", self)
-        self.train_gating_layout = QVBoxLayout(self.train_gating)
+        # self.train_gating = QGroupBox("Line gating", self)
+        # self.train_gating_layout = QVBoxLayout(self.train_gating)
 
         # Add a checkbox to apply gating
         self.gating_checkbox()  # NOTE: from the GatingCheckBox mixin class, passed in the class definition
@@ -163,7 +163,7 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
         # Initially hide / show after click on gating checkbox
         self.toggle_gating_options()
 
-        self.layout.addWidget(self.train_gating)
+        # self.train_panel_layout.addWidget(self.train_gating)
 
         # -----------------------------------------------------------
 
@@ -172,7 +172,7 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
         self.process_button.setStyleSheet(button_style())
 
         self.process_button.clicked.connect(self.start_training_process)
-        self.layout.addWidget(self.process_button)
+        self.train_panel_layout.addWidget(self.process_button)
 
         # Store the processed and filtered dataframe
         self.cleaned_data = None

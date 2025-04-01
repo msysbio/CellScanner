@@ -24,7 +24,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject
 import os
 
 from .run_prediction import predict
-from .helpers import time_based_dir, merge_prediction_results, get_channels
+from .helpers import time_based_dir, merge_prediction_results, get_channels, NOT_APPLICABLE
 from .GUIhelpers import (
     button_style, _GuiMessages, AxisSelector, LiveDeadDebrisSelectors, GatingMixin, GatingCheckBox,
     iterate_stains, load_fcs_file
@@ -265,7 +265,7 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
         except:
             print("No coculture file yet.")
             pass
-        stain_combo.addItem("Not applicable")
+        stain_combo.addItem(NOT_APPLICABLE)
 
     def channels_on_stain_buttons(self):
         for i in range(self.gating_layout.count()):

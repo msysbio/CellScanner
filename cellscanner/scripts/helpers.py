@@ -10,6 +10,9 @@ import numpy as np
 import pandas as pd
 from .illustrations import gating_plot
 
+NOT_APPLICABLE = "Not applicable"
+
+
 @dataclass
 class Stain:
     channel: str
@@ -86,7 +89,12 @@ def get_channels(channels_df):
     : channels_df: A pd.DataFrame part of the fcsparser loading function
 
     """
-    channels_df["long_channel"] = channels_df.apply(lambda row: f"{row['$PnN']} [{row['$PnS']}]" if row["$PnN"] != row["$PnS"] else row["$PnN"], axis=1)
+    channels_df["long_channel"] = channels_df.apply(
+        lambda row: f"{row['$PnN']} [{row['$PnS']}]"
+        if row["$PnN"] != row["$PnS"]
+        else row["$PnN"],
+        axis=1
+    )
     channels = set(channels_df["long_channel"])
     return channels
 
@@ -147,7 +155,7 @@ def apply_gating(data_df: pd.DataFrame,
 
     if stain1.channel is not None:
         """ STAIN FOR CELLS / DEBRIS (sybr green) """
-        if stain1.channel is not None and stain1.channel != "Not applicable":
+        if stain1.channel is not None and stain1.channel != NOT_APPLICABLE:
 
             # Initialize the 'state' column with 'not dead'
             gated_data_df['cell'] = False
@@ -169,7 +177,7 @@ def apply_gating(data_df: pd.DataFrame,
 
     if stain2.channel is not None:
         """ STAIN FOR LIVE / DEAD (PI) """
-        if stain2.channel is not None and stain2.channel != "Not applicable":
+        if stain2.channel is not None and stain2.channel != NOT_APPLICABLE:
 
             # Initialize the 'state' column with 'not dead'
             gated_data_df['dead'] = False
