@@ -1,41 +1,42 @@
-
 # Configuration file for the Sphinx documentation builder.
-#
-# This file only contains a selection of the most common options. For a full
-# list see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 # -- Path setup --------------------------------------------------------------
 
-# If extensions (or modules to document with autodoc) are in another directory,
-# add these directories to sys.path here. If the directory is relative to the
-# documentation root, use os.path.abspath to make it absolute, like shown here.
-
 import os
 import sys
-sys.path.insert(0, os.path.abspath('./extensions'))
 
 # -- Project information -----------------------------------------------------
-
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "μGrowthDB"
+project = "CellScanner"
 organization = "Lab of Microbial Systems Biology"
 author = f"{organization} & Contributors"
 copyright = f"2025, {author}"
 version = "0.0.1"
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#confval-release
 release = version
 
 # -- General configuration ---------------------------------------------------
 
-# Add any Sphinx extension module names here, as strings. They can be
-# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
-# ones.
+sys.path.insert(0, os.path.abspath('./extensions'))
+
+# Add any Sphinx extension module names here, as strings.
+# They can be extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
+# IMPORTANT NOTE: The order you give the extensions in the extensions list MATTERS!
+# e.g. https://github.com/sphinx-doc/sphinx/issues/4221
 extensions = [
-    "sphinx_inline_tabs",
-    "sphinx_design",
-    "sphinx_issues",
+
+    # To link to pyqt5 docs
+    "sphinx.ext.autodoc",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.mathjax",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.autosummary",
+    "sphinx_qt_documentation",
+
+    "nbsphinx",
+    "autoapi.extension",
+    "sphinx_search.extension",
 
     # For using CONTRIBUTING.md.
     "myst_parser",
@@ -47,71 +48,50 @@ extensions = [
     "tags",
     "links",
     "hacks",
+    # "notfound.extension",    ## not in the bac_Growt
 
-    "notfound.extension",
-
-    # These extensions require RTDs to work so they will not work locally.
-    "hoverxref.extension",
-    "sphinx_search.extension",
-
-    "autoapi.extension",
-    # "recommonmark",
 ]
 
-# Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
 
-# List of patterns, relative to source directory, that match files and
-# directories to ignore when looking for source files.
-# This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = [
-    '_build',
-    'Thumbs.db',
-    '.DS_Store',
-    ".env",
-    "extensions",
-    "**/includes",
-    "README.md",
-    "design-tabs.js", # We are using inline-tabs and this throws errors/warnings
+# -- Options for autoapi -------------------------------------------------------
+autoapi_dirs = ["../cellscanner"]
+autoapi_ignore = []
+
+# NOTE: The autoapi_options and the functions autoapi_skip_member() and setup()
+# make sure class attributes are not shown on the API
+autoapi_options = [
+    "members",
+    "undoc-members",
+    "show-inheritance",
 ]
 
-# https://github.com/readthedocs/readthedocs.org/issues/4603
-# `tags` come from the `extensions` folder, where the tags.py is located, including the `Tags` class.
-if os.environ.get('PLATFORM') == "READTHEDOCS":
-    tags.add('readthedocs')
-    tags.add("birp")
-    tags.add("hdrp")
-    tags.add("urp")
-else:
-    notfound_no_urls_prefix = True
+def autoapi_skip_member(app, what, name, obj, skip, options):
+    # Skip all attributes globally
+    if what == "attribute":
+        return True
+    return None
 
-# -- Features ----------------------------------------------------------------
+def setup(app):
+    app.connect("autoapi-skip-member", autoapi_skip_member)
 
-# Auto numbering of figures
-numfig = True
+# Enable typehints
+autodoc_typehints = "signature"
 
-# GitHub repo
-issues_github_path = "msysbio/CellScanner"
+# Napoleon settings
+napoleon_numpy_docstring = True
 
-# https://sphinx-hoverxref.readthedocs.io/en/latest/usage.html#tooltip-on-all-ref-roles
-hoverxref_auto_ref = True
-hoverxref_role_types = {
-    "ref": "tooltip",  # for hoverxref_auto_ref config
-}
+# The master toctree document.
+master_doc = "index"
+
+pygments_style = "sphinx"
 
 # -- Options for HTML output -------------------------------------------------
 
-# The theme to use for HTML and HTML Help pages.  See the documentation for
-# a list of builtin themes.
-# https://github.com/pradyunsg/furo
-# https://pradyunsg.me/furo/
 html_theme = 'furo'
 html_title = "CellScanner"
 html_short_title = "CellScanner"
-# html_logo = '../logo/crest-oceanrender-logo.svg'
 html_logo = '_static/logo.png'
 html_favicon = '_static/favicon.ico'
-
 html_theme_options = {
     "light_logo": 'logo.png',  # "crest-oceanrender-logo.svg",
     "dark_logo": 'logo-dark.png',  # "crest-oceanrender-logo-dark.svg",
@@ -144,143 +124,48 @@ html_js_files = [
 
 html_output_encoding = "utf-8"
 
-# -- Options for PDF output --------------------------------------------------
 
-# Customise PDF here. maketitle overrides the cover page.
-latex_elements = {
-    # "maketitle": "\\input{your_cover.tex}"
-    # "maketitle": "\\sphinxmaketitle",
-}
+# -- Features ----------------------------------------------------------------
 
-# latex_logo = "../logo/crest-oceanrender-logomark512.png"
-latex_logo = "_static/logo.png"
+# Auto numbering of figures
+numfig = True
+
+issues_github_path = "hariszaf/cellscanner"
+
+mathjax_path = (
+    "https://cdn.mathjax.org/mathjax/latest/"
+    "MathJax.js?config=TeX-AMS-MML_HTMLorMML"
+)
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+
+
+# Add any paths that contain templates here, relative to this directory.
+templates_path = ['_templates']
+
+
+# myst_enable_extensions = ["colon_fence"]
 
 # -- Templating --------------------------------------------------------------
 
 # The default role will be used for `` so we do not need to do :get:``.
 default_role = "get"
 
-# "replace" substitutions are static/global:
-#   |name1| replace:: value
-#   |name1|
-# Cannot do this:
-#   |name2| replace:: |name1|
-# Inline content has no nested parsing.
-
-# "set" only supports inline content. It will pass its contents to the parser so roles will be processed. Brace
-# substitution is supported and is text only (it will lose any nodes). Use it when you need substitutions in role
-# content.
-#   .. set:: LongName Example
-#   .. set:: ShortName :abbr:`{LongName}`
-#   An example of using `ShortName`.
-
-# For links where you want to use substitutions, use the link role:
-#   .. set Something Example Page
-#   .. set BaseURL https://example.com
-#   :link:`Link Text for {Something} <{BaseURL}/example>`
-# Pass the URL within the angle brackets. Brace substitution will work and will be text only for URLs and support nodes
-# for the link text.
-#
-# For URLs, it is best to use braces even in "set" as they don't require being enclosed in escaped whitespace:
-#   .. set:: Link `LinkBase`\ /something/\ `LinkPart`\ /example.html
-# Versus:
-#   .. set:: Link {LinkBase}/something/{LinkPart}/example.html
-
-# The following will be included before every page:
-rst_prolog = f"""
-.. tags::
-.. set:: AssetVersion {version}
-
-"""
-rst_prolog = rst_prolog + """
-.. set:: RPMinVersion 10.10
-.. set:: UPMDocLinkBase \https://docs.unity3d.com/Packages
-.. set:: RPDocLinkBase \https://docs.unity3d.com/Packages/com.unity.render-pipelines.
-.. set:: UnityMinVersion 2020.3
-.. set:: UnityDocsLinkBase https://docs.unity3d.com/{UnityMinVersion}/Documentation
-.. set:: UnityDocLink https://docs.unity3d.com/{UnityMinVersion}/Documentation/Manual
-.. set:: UnityDocScriptLink {UnityDocsLinkBase}/ScriptReference
-.. set:: UnityIssueLink https://issuetracker.unity3d.com/product/unity/issues/guid
-.. set:: AssetStoreLinkBase \https://assetstore.unity.com/packages/tools/particles-effects
-.. set:: DocLinkBase https://mgrowthdb.readthedocs.io/en/{AssetVersion}
-.. set:: GitHubLink \https://github.com/msysbio/CellScanner
-.. set:: WikiLink \{GitHubLink}/wiki
-
-.. set:: SGDocLink {UPMDocLinkBase}/com.unity.shadergraph@{RPMinVersion}/manual
-
-.. set:: [BIRP] :guilabel:`BIRP`
-.. set:: BIRPNameLong Built-in
-.. set:: BIRPNameShort BIRP
-.. set:: BIRPNameSlug birp
-.. set:: BIRP :abbr:`{BIRPNameShort} ({BIRPNameLong} Render Pipeline)`
-.. set:: BIRPMinVersion `RPMinVersion`
-.. set:: BIRPDocLink {UnityDocLink}/
-.. set:: BIRPAssetDocLink {DocLinkBase}?rp={BIRPNameSlug}
-
-.. set:: [URP] :guilabel:`URP`
-.. set:: URPNameLong Universal
-.. set:: URPNameShort URP
-.. set:: URPNameSlug urp
-.. set:: URP :abbr:`{URPNameShort} ({URPNameLong} Render Pipeline)`
-.. set:: URPMinVersion `RPMinVersion`
-.. set:: URPDocLink {RPDocLinkBase}universal@{URPMinVersion}/manual
-.. set:: URPAssetLink {AssetStoreLinkBase}/crest-ocean-system-urp-141674
-.. set:: URPAssetDocLink {DocLinkBase}/?rp={URPNameSlug}
-
-.. set:: [HDRP] :guilabel:`HDRP`
-.. set:: HDRPNameLong High Definition
-.. set:: HDRPNameShort HDRP
-.. set:: HDRPNameSlug hdrp
-.. set:: HDRP :abbr:`{HDRPNameShort} ({HDRPNameLong} Render Pipeline)`
-.. set:: HDRPMinVersion `RPMinVersion`
-.. set:: HDRPDocLink {RPDocLinkBase}high-definition@{HDRPMinVersion}/manual
-.. set:: HDRPAssetLink {AssetStoreLinkBase}/crest-ocean-system-hdrp-164158
-.. set:: HDRPAssetDocLink {DocLinkBase}/?rp={HDRPNameSlug}
-
-.. set:: Crest *Crest*
-
-.. set:: TAA :abbr:`TAA (Temporal Anti-Aliasing)`
-.. set:: SMAA :abbr:`SMAA (Subpixel Morphological Anti-Aliasing)`
-.. set:: SPI :abbr:`SPI (Single-Pass Instanced)`
-.. set:: MP :abbr:`MP (Multi-Pass)`
-.. set:: FFT :abbr:`FFT (Fast Fourier Transform)`
-.. set:: GC :abbr:`GC (Garbage Collector)`
-.. set:: SSR :abbr:`SSR (Screen-Space Reflections)`
-.. set:: SSAO :abbr:`SSAO (Screen-Space Ambient Occlusion)`
-.. set:: SAO :abbr:`SSAO (Scalable Ambient Occlusion)`
-.. set:: STPP :abbr:`STPP (Spatial-Temporal Post-Processing)`
-
-.. set:: DWP2 :abbr:`DWP2 (Dynamic Water Physics 2)`
-
-.. set:: Time.time :link:`Time.time <{UnityDocScriptLink}/Time-time.html>`
-.. set:: Time.timeScale :link:`Time.timeScale <{UnityDocScriptLink}/Time-timeScale.html>`
-.. set:: Timeline :link:`Timeline <{UPMDocLinkBase}/com.unity.timeline@1.5/manual/tl_about.html>`
-.. set:: Playable_Director :link:`Playable Director <{UPMDocLinkBase}/com.unity.timeline@1.5/manual/play_director.html>`
-.. set:: Master_Stack :link:`Master Stack <{SGDocLink}/Master-Stack.html>`
-.. set:: HDRP_Lit_Shader :link:`Lit Shader <{HDRPDocLink}/Lit-Shader.html>`
-.. set:: URP_Lit_Shader :link:`Lit Shader <{URPDocLink}/lit-shader.html>`
-"""
-
-# -- Debugging ---------------------------------------------------------------
-
-# For debugging if you want to always have a tag on or off
-# tags.add("tag")
-# tags.remove("tag")
-
-
-# -- Options for autoapi -------------------------------------------------------
-autoapi_type = "python"
-autoapi_dirs = ["../scripts"]
-autoapi_keep_files = True
-autoapi_root = "api"
-autoapi_member_order = "groupwise"
-
-
 # -- Options for markdown -------------------------------------------------------
-# source_suffix = ['.rst', '.md']
 
 # No need to manually register .md, as myst_parser handles it
 source_suffix = {
     '.rst': 'restructuredtext',
     '.md': 'markdown',  # This is registered automatically by myst_parser
+}
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "PyQt5.QtWidgets": ("https://www.riverbankcomputing.com/static/Docs/PyQt5", None),
+    "PySide6": ("https://doc.qt.io/qtforpython/", None),
+    "Numpy": ("https://docs.scipy.org/doc/numpy/", None),
+    "pandas": ("https://pandas.pydata.org/pandas-docs/stable/", None),
+    "packaging": ("https://packaging.pypa.io/en/latest/", None),
+        # from here: https://github.com/GPflow/tensorflow-intersphinx/
+    "tensorflow": ("https://www.tensorflow.org/api_docs/python", "https://github.com/GPflow/tensorflow-intersphinx/raw/master/tf2_py_objects.inv"),
+    'sklearn': ('http://scikit-learn.org/stable', None)
 }

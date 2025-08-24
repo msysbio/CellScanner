@@ -10,3 +10,6 @@ sphinx-inline-tabs==2023.4.21
 sphinx-issues==3.0.1
 sphinx-notfound-page==1.0.0
 sphinx-autoapi==3.4.0
+sphinx-qt-documentation==0.4.1
+PyQt5
+nbsphinx

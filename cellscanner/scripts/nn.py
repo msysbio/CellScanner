@@ -173,11 +173,13 @@ def prepare_for_training(TrainPanel=None, **kwargs):
     X_arcsinh = np.arcsinh(X / scaling_constant)
 
     # 4. Scaling
+    # The standard score of a sample `x` :
+    #       z = (x - u) / s
+    # where `u` is the mean of the training samples and `s` is the standard deviation of the training samples.
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X_arcsinh)
-
-    # (Skipping PCA, so X_whitened = X_scaled)
-    X_whitened = X_scaled
+    # NOTE: Skipping PCA, so X_whitened in previous implementations, is now replaced by X_scaled
+    # X_whitened = X_scaled
 
     # Save scaler for future use/prediction
     model_dir = os.path.join(working_directory, "model")  # get_abs_path('model/statistics')
@@ -193,16 +195,17 @@ def prepare_for_training(TrainPanel=None, **kwargs):
 
     if gui:
         # Store entire dataset
-        TrainPanel.X = X_whitened
+        TrainPanel.X = X_scaled
         TrainPanel.y = y_categorical
         TrainPanel.scaler = scaler
         TrainPanel.le = le
         print("Success: Data preparation done.")
 
+        # In GUI, call the main function for training the Neural Network.
         train_neural_network(TrainPanel)
 
     else:
-        return X_whitened, y_categorical, scaler, le
+        return X_scaled, y_categorical, scaler, le
 
 
 def build_model(input_dim, num_classes):

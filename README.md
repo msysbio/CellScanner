@@ -28,7 +28,7 @@ To run CellScanner with its GUI, you may now run:
 # Always remember to activate your conda environment, if you set one for CellScanner
 conda activate cellscanner
 # If `python` returns an error message that is not there, try with `python3` instead
-python Cellscanner.py
+python cellscanner/Cellscanner.py
 ```
 
 This will pop-up CellScanner where you can now import your data, fill in your training parameters and 
@@ -90,7 +90,7 @@ Once your configuration file is ready, you may run CellScanner CLI :
 
 ```bash
 conda activate cellscanner
-python CellscannerCLI.py --config config.yml
+python cellscanner/CellscannerCLI.py --config config.yml
 ```
 
 
@@ -107,5 +107,22 @@ For the new features that have been added, a manuscript is in process. :pencil:
 
 
 
+## Docker 
+
+In linux, remember to disable access control for local connections first:
+
+  ```bash
+  xhost +local:
+  ```
+
+  then, you need to run something line:
+
+  ```bash
+  docker run -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v ./Testfiles:/csFiles  hariszaf/cell_scanner
+  ```
+  
+  where `Testfiles` is the directory where you have you input data, and also, where CellScanner will return its findings, on your local machine. 
+
+  `csFiles` is the output directory of CellScanner within the container, so make sure you always keep it like that in your command. 
 
 
