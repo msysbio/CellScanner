@@ -218,12 +218,15 @@ class GatingMixin:
         """Displays or conceals gating options contingent on the gating checkbox state."""
         is_checked = self.gating_checkbox.isChecked()
 
-        if self.get_host_class_name() == "TrainModelPanel":
-            if is_checked and len(self.file_panel.blank_files) > 0:
-                # Update all stain selectors
-                for selector in self.stain_selectors:
-                    # selector.set_items(self.file_panel.numeric_columns_set)
-                    selector.set_items(self.file_panel.channels)
+        if (
+            self.get_host_class_name() == "TrainModelPanel"
+            and is_checked
+            and len(self.file_panel.blank_files) > 0
+        ):
+            # Update all stain selectors
+            for selector in self.stain_selectors:
+                # selector.set_items(self.file_panel.numeric_columns_set)
+                selector.set_items(self.file_panel.channels)
 
         for selector in self.stain_selectors:
             selector.label.setVisible(is_checked)
@@ -243,7 +246,7 @@ class GatingMixin:
 
 
 class GatingCheckBox:
-    """ """
+    """Class for the gating checkbox and its related message."""
 
     def gating_checkbox(self):
         # Add a checkbox to apply gating
@@ -451,7 +454,8 @@ def load_fcs_file(fcss):
 
 
 def button_style(
-    font_size=12,
+    font="Helvetica",
+    font_size=14,
     padding=5,
     color="black",
     bck_col="#90EE90",

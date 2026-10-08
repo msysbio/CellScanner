@@ -1,21 +1,19 @@
-import os
-import joblib
-
 import math
+import os
+
+import joblib
 import numpy as np
 import pandas as pd
-
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Input
+from scipy.stats import entropy
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.utils.class_weight import compute_class_weight
 from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.layers import Dense, Dropout, Input
+from tensorflow.keras.models import Sequential
 from tensorflow.keras.utils import to_categorical
 
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.model_selection import train_test_split
-from sklearn.utils.class_weight import compute_class_weight
-from sklearn.metrics import confusion_matrix, classification_report
-from sklearn.model_selection import StratifiedKFold
-from scipy.stats import entropy
 
 def train_neural_network(TrainPanel=None, **kwargs):
 
@@ -36,26 +34,27 @@ def train_neural_network(TrainPanel=None, **kwargs):
         epochs = kwargs["epochs"]
         batch_size = kwargs["batch_size"]
         patience = kwargs["patience"]
-        X, y = kwargs["X"], kwargs["y"],
-        species_names=kwargs["species_names"]
-        working_directory=kwargs["working_directory"]
+        X, y = (
+            kwargs["X"],
+            kwargs["y"],
+        )
+        species_names = kwargs["species_names"]
+        working_directory = kwargs["working_directory"]
 
     if X is None or y is None:
         raise ValueError("No dataset loaded. Please run prepare_for_training first.")
 
     # Convert one-hot y back to integer if needed
     y_int = np.argmax(y, axis=1)
-    model_dir = os.path.join(working_directory, "model")  # get_abs_path('model/statistics')
+    model_dir = os.path.join(
+        working_directory, "model"
+    )  # get_abs_path('model/statistics')
 
     # -------------- IF user chooses 0 folds --------------
     if fold_count == 0:
-
         # Just do a single hold-out approach (e.g., 80-20 split)
         X_train, X_val, y_train, y_val = train_test_split(
-            X, y,
-            test_size=0.2,
-            random_state=42,
-            stratify=y_int
+            X, y, test_size=0.2, random_state=42, stratify=y_int
         )
         print("No cross-validation; using a single train/val split (80-20).")
 
@@ -68,13 +67,23 @@ def train_neural_network(TrainPanel=None, **kwargs):
         y_train_int = np.argmax(y_train, axis=1)
 
         # Run training step
-        model, val_loss, val_accuracy = train_wrapper(model, X_train, y_train, y_train_int,
-            X_val, y_val, epochs, batch_size, patience
+        model, val_loss, val_accuracy = train_wrapper(
+            model,
+            X_train,
+            y_train,
+            y_train_int,
+            X_val,
+            y_val,
+            epochs,
+            batch_size,
+            patience,
         )
-        print(f"Single Split -> val_accuracy={val_accuracy:.4f}, val_loss={val_loss:.4f}")
+        print(
+            f"Single Split -> val_accuracy={val_accuracy:.4f}, val_loss={val_loss:.4f}"
+        )
 
         # Save the trained model
-        model.save(os.path.join(model_dir, 'trained_model.keras'))
+        model.save(os.path.join(model_dir, "trained_model.keras"))
 
     # -------------- IF user chooses 5 or 10 folds --------------
     else:
@@ -98,12 +107,21 @@ def train_neural_network(TrainPanel=None, **kwargs):
 
             y_train_int = np.argmax(y_train, axis=1)
 
-            model, val_loss, val_accuracy = train_wrapper(model,
-                        X_train, y_train, y_train_int,
-                        X_val, y_val, epochs, batch_size, patience
+            model, val_loss, val_accuracy = train_wrapper(
+                model,
+                X_train,
+                y_train,
+                y_train_int,
+                X_val,
+                y_val,
+                epochs,
+                batch_size,
+                patience,
             )
             fold_accuracies.append(val_accuracy)
-            print(f"Fold {fold_idx} -> val_accuracy={val_accuracy:.4f}, val_loss={val_loss:.4f}")
+            print(
+                f"Fold {fold_idx} -> val_accuracy={val_accuracy:.4f}, val_loss={val_loss:.4f}"
+            )
 
             if val_accuracy > best_accuracy:
                 best_accuracy = val_accuracy
@@ -112,7 +130,7 @@ def train_neural_network(TrainPanel=None, **kwargs):
             fold_idx += 1
 
         # Save best model
-        best_model.save(os.path.join(model_dir, 'trained_model.keras'))
+        best_model.save(os.path.join(model_dir, "trained_model.keras"))
 
         # Re-run the split to get best fold's data for confusion matrix
         fold_idx = 1
@@ -123,16 +141,16 @@ def train_neural_network(TrainPanel=None, **kwargs):
             fold_idx += 1
 
     # Save models and stats and calculate threshold
-    trained_model = best_model if 'best_model' in locals() else model
+    trained_model = best_model if "best_model" in locals() else model
     threshold = save_train_stats(
         trained_model,
-        X_val_bf if 'X_val_bf' in locals() else X_val,
-        y_val_bf if 'y_val_bf' in locals() else y_val,
+        X_val_bf if "X_val_bf" in locals() else X_val,
+        y_val_bf if "y_val_bf" in locals() else y_val,
         species_names,
         model_dir,
-        best_accuracy if 'best_accuracy' in locals() else val_accuracy,
-        best_fold if 'best_fold' in locals() else None,
-        fold_count
+        best_accuracy if "best_accuracy" in locals() else val_accuracy,
+        best_fold if "best_fold" in locals() else None,
+        fold_count,
     )
     # Return the best model
     if gui:
@@ -160,14 +178,16 @@ def prepare_for_training(TrainPanel=None, **kwargs):
         working_directory = kwargs["working_directory"]
 
     if cleaned_data is None:
-        raise ValueError("No cleaned data available for training. Please process the data first.")
+        raise ValueError(
+            "No cleaned data available for training. Please process the data first."
+        )
 
     # Make a copy of the cleaned data
     cleaned_data_copy = cleaned_data.copy()
 
     # 2. Separate features and labels
-    X = cleaned_data_copy.drop('Species', axis=1)
-    y_species = cleaned_data_copy['Species'].values
+    X = cleaned_data_copy.drop("Species", axis=1)
+    y_species = cleaned_data_copy["Species"].values
 
     # 3. arcsinh transform
     X_arcsinh = np.arcsinh(X / scaling_constant)
@@ -182,16 +202,18 @@ def prepare_for_training(TrainPanel=None, **kwargs):
     # X_whitened = X_scaled
 
     # Save scaler for future use/prediction
-    model_dir = os.path.join(working_directory, "model")  # get_abs_path('model/statistics')
+    model_dir = os.path.join(
+        working_directory, "model"
+    )  # get_abs_path('model/statistics')
     os.makedirs(model_dir, exist_ok=True)
-    joblib.dump(scaler, os.path.join(model_dir, 'scaler.pkl'))
+    joblib.dump(scaler, os.path.join(model_dir, "scaler.pkl"))
 
     # 5. Label encoding -> one-hot
     le = LabelEncoder()
     y_int = le.fit_transform(y_species)
     y_categorical = to_categorical(y_int)
 
-    joblib.dump(le, os.path.join(model_dir, 'label_encoder.pkl'))
+    joblib.dump(le, os.path.join(model_dir, "label_encoder.pkl"))
 
     if gui:
         # Store entire dataset
@@ -212,47 +234,48 @@ def build_model(input_dim, num_classes):
     """
     Helper function to build a fresh model.
     """
-    model = Sequential([
-        Input(shape=(input_dim,)),
-        Dense(64, activation='relu'),
-        Dropout(0.5),
-        Dense(32, activation='relu'),
-        Dropout(0.5),
-        Dense(num_classes, activation='softmax')
-    ])
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    model = Sequential(
+        [
+            Input(shape=(input_dim,)),
+            Dense(64, activation="relu"),
+            Dropout(0.5),
+            Dense(32, activation="relu"),
+            Dropout(0.5),
+            Dense(num_classes, activation="softmax"),
+        ]
+    )
+    model.compile(
+        optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"]
+    )
     return model
 
 
-def train_wrapper(model, X_train, y_train, y_train_int, X_val, y_val, epochs, batch_size, patience):
+def train_wrapper(
+    model, X_train, y_train, y_train_int, X_val, y_val, epochs, batch_size, patience
+):
     """
     Helper function to train the model and return validation accuracy.
     """
     cw = compute_class_weight(
-        class_weight='balanced',
-        classes=np.unique(y_train_int),
-        y=y_train_int
+        class_weight="balanced", classes=np.unique(y_train_int), y=y_train_int
     )
     class_weight_dict = dict(enumerate(cw))
 
     # EarlyStopping
     early_stopping = EarlyStopping(
-        monitor='val_accuracy',
-        min_delta=0.01,
-        patience=patience,
-        mode='max',
-        verbose=1
+        monitor="val_accuracy", min_delta=0.01, patience=patience, mode="max", verbose=1
     )
 
     # Train
     model.fit(
-        X_train, y_train,
+        X_train,
+        y_train,
         validation_data=(X_val, y_val),
         epochs=epochs,
         batch_size=batch_size,
         callbacks=[early_stopping],
         class_weight=class_weight_dict,
-        verbose=0
+        verbose=0,
     )
 
     # Evaluate
@@ -261,11 +284,21 @@ def train_wrapper(model, X_train, y_train, y_train_int, X_val, y_val, epochs, ba
     return model, val_loss, val_accuracy
 
 
-def save_train_stats(model, X_val_bf, y_val_bf, species_names, model_dir, best_accuracy,
-                     fold_count, best_fold=None):
+def save_train_stats(
+    model,
+    X_val_bf,
+    y_val_bf,
+    species_names,
+    model_dir,
+    best_accuracy,
+    fold_count,
+    best_fold=None,
+):
 
     # Predict validation data
-    conf_matrix_df, class_report_df, threshold = predict_validation(model, X_val_bf, y_val_bf, species_names)
+    conf_matrix_df, class_report_df, threshold = predict_validation(
+        model, X_val_bf, y_val_bf, species_names
+    )
 
     # Save stats
     print("class_report")
@@ -275,18 +308,18 @@ def save_train_stats(model, X_val_bf, y_val_bf, species_names, model_dir, best_a
     if not all(name in class_report_df.index for name in species_names):
         raise ValueError
 
-    stats_path = (os.path.join(model_dir, 'model_statistics_kfold.csv')
-                  if fold_count is not None
-                  else os.path.join(model_dir, 'model_statistics.csv')
+    stats_path = (
+        os.path.join(model_dir, "model_statistics_kfold.csv")
+        if fold_count is not None
+        else os.path.join(model_dir, "model_statistics.csv")
     )
-    with open(stats_path, 'w') as f:
-
+    with open(stats_path, "w") as f:
         if best_fold is not None:
             f.write(f"Folds: {fold_count}\n")
             f.write(f"Best Fold: {best_fold}\n")
 
         f.write(f"Best Accuracy: {best_accuracy:.4f}\n")
-        f.write("Threshold for Uncertainty: {:.4f}\n\n".format(threshold))
+        f.write(f"Threshold for Uncertainty: {threshold:.4f}\n\n")
 
         f.write("Confusion Matrix:\n")
         conf_matrix_df.to_csv(f, header=True, index=True)
@@ -294,7 +327,9 @@ def save_train_stats(model, X_val_bf, y_val_bf, species_names, model_dir, best_a
         class_report_df.to_csv(f, header=True, index=True)
 
     if best_fold is not None:
-        print(f"K-Fold training done. Best fold = {best_fold} with accuracy = {best_accuracy:.4f}. Stats saved.")
+        print(
+            f"K-Fold training done. Best fold = {best_fold} with accuracy = {best_accuracy:.4f}. Stats saved."
+        )
     else:
         print("Done training with single split (no cross-validation).")
 
@@ -313,21 +348,22 @@ def predict_validation(model, X_val_bf, y_val_bf, species_names):
     y_true_classes = np.argmax(y_val_bf, axis=1)
 
     class_report_dict = classification_report(
-        y_true_classes, y_pred_classes,
+        y_true_classes,
+        y_pred_classes,
         target_names=species_names,
         output_dict=True,
-        zero_division=0
+        zero_division=0,
     )
     class_report_df = pd.DataFrame(class_report_dict).T
 
     conf_matrix = confusion_matrix(y_true_classes, y_pred_classes)
     conf_matrix_df = pd.DataFrame(
-        conf_matrix,
-        index=species_names,
-        columns=species_names
+        conf_matrix, index=species_names, columns=species_names
     )
 
-    threshold = calculate_threshold(uncertainties, y_pred_classes, y_true_classes, species_names)
+    threshold = calculate_threshold(
+        uncertainties, y_pred_classes, y_true_classes, species_names
+    )
 
     return conf_matrix_df, class_report_df, threshold
 
@@ -354,18 +390,18 @@ def calculate_threshold(uncertainties, y_pred_classes, y_true_classes, species_n
                 y_pred=y_pred_classes_filtered,
                 target_names=species_names,
                 output_dict=True,
-                zero_division=0
+                zero_division=0,
             )
             threshold_report[threshold] = class_report_dict
         except:
             print(f"Threshold {threshold} does not return all {len(species_names)}.")
             threshold_report[threshold] = None
-            pass
 
-    best_accuracy = 0.0 ; best_threshold = 0.0
+    best_accuracy = 0.0
+    best_threshold = 0.0
     for threshold, report in threshold_report.items():
         if report is not None:
-            accuracy = report['accuracy']
+            accuracy = report["accuracy"]
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
                 best_threshold = threshold
