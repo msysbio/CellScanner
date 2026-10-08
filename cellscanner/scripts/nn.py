@@ -14,6 +14,8 @@ from tensorflow.keras.layers import Dense, Dropout, Input
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.utils import to_categorical
 
+from .helpers import save_run_parameters
+
 
 def train_neural_network(TrainPanel=None, **kwargs):
 
@@ -154,6 +156,18 @@ def train_neural_network(TrainPanel=None, **kwargs):
         fold_count=fold_count,
         best_fold=best_fold,
     )
+    save_run_parameters(
+        os.path.join(model_dir, "training_parameters.yml"),
+        {
+            "folds": fold_count,
+            "epochs": epochs,
+            "batch_size": batch_size,
+            "early_stopping_patience": patience,
+            "best_accuracy": best_accuracy,
+            "best_fold": best_fold,
+            "suggested_uncertainty_threshold": threshold,
+        },
+    )
     # Return the best model
     if gui:
         TrainPanel.model = trained_model
@@ -209,6 +223,10 @@ def prepare_for_training(TrainPanel=None, **kwargs):
     )  # get_abs_path('model/statistics')
     os.makedirs(model_dir, exist_ok=True)
     joblib.dump(scaler, os.path.join(model_dir, "scaler.pkl"))
+    save_run_parameters(
+        os.path.join(model_dir, "training_parameters.yml"),
+        {"scaling_constant": scaling_constant, "channels": list(X.columns)},
+    )
 
     # 5. Label encoding -> one-hot
     le = LabelEncoder()

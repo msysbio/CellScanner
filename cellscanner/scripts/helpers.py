@@ -5,7 +5,7 @@ Helpers functions to support CellScanner main tasks.
 import os
 import sys
 import warnings
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 
 import numpy as np
@@ -81,6 +81,37 @@ def load_model_from_files(trained_model_dir):
         raise ValueError(
             f"No valid model directory. Check whether all 3 required files are there and valid.error: {e}"
         ) from e
+
+
+def _yaml_safe(value):
+    """Converts Stain instances, numpy scalars and containers to plain types that YAML can write."""
+    if isinstance(value, Stain):
+        return _yaml_safe(asdict(value))
+    if isinstance(value, dict):
+        return {str(k): _yaml_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set, np.ndarray, pd.Index)):
+        return [_yaml_safe(v) for v in value]
+    if isinstance(value, np.generic):
+        return value.item()
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def save_run_parameters(path, params):
+    """
+    Adds ``params`` to the YAML file at ``path`` (creating it if needed), so users can trace
+    which settings were used in a run. Existing keys are overwritten, other keys are kept.
+    """
+    import yaml
+
+    existing = {}
+    if os.path.exists(path):
+        with open(path) as f:
+            existing = yaml.safe_load(f) or {}
+    existing.update(_yaml_safe(params))
+    with open(path, "w") as f:
+        yaml.safe_dump(existing, f, sort_keys=False)
 
 
 def create_file_path(output_dir, sample, name, extension):

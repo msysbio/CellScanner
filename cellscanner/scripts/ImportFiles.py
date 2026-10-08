@@ -268,6 +268,7 @@ class ImportFilePanel(QWidget):
                     self, "Model loading", "Model files loaded successfully."
                 )
                 self.previously_trained_model_button.setText(trained_model_dir)
+                self.model_dir = trained_model_dir
                 self.model_loaded = self.model is not None
                 self.blank_files = []
                 self.species_files = {}

@@ -6,6 +6,7 @@ Besides using CellScanner throught its GUI, you may use it through a CLI.
 To this end, you should first complete a [`config.yml`](../config.yml) file, providing the necessary parameters.
 """
 import os
+import shutil
 import sys
 import yaml
 import argparse
@@ -186,6 +187,9 @@ class CellScannerCLI():
         )
         os.makedirs(self.predict_dir, exist_ok=True)
 
+        # Keep the exact configuration file used next to the predictions
+        shutil.copy(self.conf, os.path.join(self.predict_dir, "config_used.yml"))
+
         for sample_file in self.coculture_files:
 
             sample_id = os.path.basename(sample_file)
@@ -218,7 +222,8 @@ class CellScannerCLI():
                 "gating": self.gating,
                 "scaling_constant": self.scaling_constant,
                 "filter_out_uncertain": self.filter_out_uncertain,
-                "uncertainty_threshold": self.uncertainty_threshold
+                "uncertainty_threshold": self.uncertainty_threshold,
+                "model_dir": self.prev_trained_model or os.path.join(self.output_dir, "model"),
             }
             # Add specific parameters based on gating
             if self.gating:

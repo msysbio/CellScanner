@@ -7,6 +7,7 @@ are kept for the training of the Neural Network step.
 """
 
 import os
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 import fcsparser
@@ -16,7 +17,7 @@ import umap
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
 
-from .helpers import Stain, apply_gating
+from .helpers import Stain, apply_gating, save_run_parameters
 from .illustrations import umap_plot
 from .nn import prepare_for_training
 
@@ -180,6 +181,21 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
     gating_log = os.path.join(model_dir, "gating_input_data.txt")
     if os.path.exists(gating_log):
         os.remove(gating_log)
+
+    # Keep track of the training settings next to the model; later training steps add to this file
+    training_params_file = os.path.join(model_dir, "training_parameters.yml")
+    if os.path.exists(training_params_file):
+        os.remove(training_params_file)
+    save_run_parameters(
+        training_params_file,
+        {
+            "date": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "interface": "GUI" if gui else "CLI",
+            **{k: v for k, v in params.items() if k not in ("stain_1", "stain_2")},
+            "stain1_train": stain_1,
+            "stain2_train": stain_2,
+        },
+    )
 
     # Build a map between the species name and their index on the key list
     label_map = {

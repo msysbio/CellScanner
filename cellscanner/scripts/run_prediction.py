@@ -1,5 +1,6 @@
 import math
 import os
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -7,7 +8,12 @@ from scipy.stats import entropy
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics import pairwise_distances
 
-from .helpers import apply_gating, create_file_path, save_gating_results
+from .helpers import (
+    apply_gating,
+    create_file_path,
+    save_gating_results,
+    save_run_parameters,
+)
 from .illustrations import (
     create_color_map,
     heterogeneity_bar_plot,
@@ -36,11 +42,15 @@ def predict(PredictionPanel=None, **kwargs):
         model, scaler, label_encoder, scaling_constant = get_model_components(
             PredictionPanel.file_panel
         )
+        model_dir = getattr(PredictionPanel.file_panel, "model_dir", None)
 
         # Fallback to train_panel if not found in file_panel
         if model is None:
             model, scaler, label_encoder, scaling_constant = get_model_components(
                 PredictionPanel.train_panel
+            )
+            model_dir = os.path.join(
+                PredictionPanel.train_panel.file_panel.working_directory, "model"
             )
 
         data_df = PredictionPanel.data_df
@@ -94,6 +104,7 @@ def predict(PredictionPanel=None, **kwargs):
         scaling_constant = kwargs["scaling_constant"]
         filter_out_uncertain = kwargs["filter_out_uncertain"]
         uncertainty_threshold = kwargs["uncertainty_threshold"]
+        model_dir = kwargs.get("model_dir")
         if gating:
             stain1, stain2 = kwargs["stain1"], kwargs["stain2"]
             extra_stains = kwargs["extra_stains"]
@@ -114,6 +125,26 @@ def predict(PredictionPanel=None, **kwargs):
             print(
                 f"Threshold as 0.5 of max entropy: {uncertainty_threshold}, max entropy: {max_entropy}"
             )
+
+    # Keep track of the settings used in this run in the Prediction folder
+    save_prediction_parameters(
+        output_dir,
+        sample,
+        model_dir,
+        {
+            "interface": "GUI" if gui else "CLI",
+            "scaling_constant": scaling_constant,
+            "filter_out_uncertain": filter_out_uncertain,
+            "uncertainty_threshold": uncertainty_threshold,
+            "gating": gating,
+            "stain1_predict": stain1 if gating else None,
+            "stain2_predict": stain2 if gating else None,
+            "extra_stains": extra_stains if gating else None,
+            "x_axis": x_axis_combo,
+            "y_axis": y_axis_combo,
+            "z_axis": z_axis_combo,
+        },
+    )
 
     # Predict the species in the coculture file
     predicted_classes, uncertainties, index_to_species = predict_species(
@@ -201,6 +232,41 @@ def predict(PredictionPanel=None, **kwargs):
 
 
 # Functions to be used by the predict()
+def save_prediction_parameters(output_dir, sample, model_dir, settings):
+    """
+    Writes the settings of a prediction run to ``run_parameters.yml`` in the Prediction folder.
+    The file is shared by all samples of a run: each call adds its sample to the ``samples`` list.
+    If the model folder has a ``training_parameters.yml``, it is included under ``training``.
+    """
+    import yaml
+
+    params_file = os.path.join(output_dir, "run_parameters.yml")
+    previous = {}
+    if os.path.exists(params_file):
+        with open(params_file) as f:
+            previous = yaml.safe_load(f) or {}
+
+    training = None
+    if model_dir is not None:
+        training_file = os.path.join(model_dir, "training_parameters.yml")
+        if os.path.exists(training_file):
+            with open(training_file) as f:
+                training = yaml.safe_load(f)
+
+    save_run_parameters(
+        params_file,
+        {
+            "date": previous.get(
+                "date", datetime.now().astimezone().isoformat(timespec="seconds")
+            ),
+            "samples": previous.get("samples", []) + [sample],
+            "model_directory": os.path.abspath(model_dir) if model_dir else None,
+            **settings,
+            "training": training,
+        },
+    )
+
+
 def predict_species(
     data_df: pd.DataFrame,
     model: "tensorflow.keras.Sequential",
