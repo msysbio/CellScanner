@@ -4,6 +4,7 @@ Helpers functions to support CellScanner main tasks.
 
 import os
 import sys
+import warnings
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -106,17 +107,32 @@ def get_channels(channels_df):
     return channels
 
 
+def gate(series: pd.Series, sign: str, value: float) -> pd.Series:
+    """
+    Returns a boolean mask of the entries of ``series`` that meet the threshold.
+    Accepts both the GUI (``>``, ``<``) and the CLI (``greater_than``, ``less_than``) sign spellings.
+    """
+    if sign in (">", "greater_than"):
+        return series > value
+    if sign in ("<", "less_than"):
+        return series < value
+    raise ValueError(
+        f"Unknown sign {sign!r}; use '>'/'greater_than' or '<'/'less_than'."
+    )
+
+
 def stain_sannity_check(df, label, channel, sign, threshold):
     """
     Checks if gating applied for a stain returns both True and False cases.
-    If not, raises an error so the user refines their thresholds.
+    If not, warns the user so they can refine their thresholds; a gate that does not split
+    a file is not necessarily an error (e.g. a clean monoculture above a debris threshold).
     """
-    counts = df[label].value_counts()
-    if True not in counts.index or False not in counts.index:
+    frac = df[label].mean()
+    if frac in (0.0, 1.0):
         stain_min, stain_max = np.min(df[channel]), np.max(df[channel])
-        raise ValueError(
-            f"Invalid gating. Please check the gating thresholds."
-            f"Stain {channel} ranges between {stain_min} and {stain_max}, while current gating thresholds are {sign} {threshold}."
+        warnings.warn(
+            f"Gate {channel} {sign} {threshold} labels {frac:.0%} of the events as '{label}'. "
+            f"Stain {channel} ranges between {stain_min} and {stain_max}."
         )
 
 
@@ -168,79 +184,33 @@ def apply_gating(
     if stain1.channel is not None:
         """ STAIN FOR CELLS / DEBRIS (sybr green) """
         if stain1.channel is not None and stain1.channel != NOT_APPLICABLE:
-            # Initialize the 'state' column with 'not dead'
-            gated_data_df["cell"] = False
-
-            # Apply gating based on the first stain (live/dead)
-            if stain1.sign in [">", "greater_than"]:
-                gated_data_df.loc[
-                    gated_data_df[stain1.channel] > stain1.value, "cell"
-                ] = True
-
-            elif stain1.sign in ["<", "less_than"]:
-                gated_data_df.loc[
-                    gated_data_df[stain1.channel] < stain1.value, "cell"
-                ] = True
-
-            # Sannity check
-            try:
-                stain_sannity_check(
-                    gated_data_df, "cell", stain1.channel, stain1.sign, stain1.value
-                )
-                all_labels.append("cell")
-
-            except Exception as e:
-                raise ValueError(
-                    f"Gating failed for stain1: {stain1.channel}. Original error: {e}"
-                ) from e
+            # Entries where the threshold holds are cells; the rest are debris
+            gated_data_df["cell"] = gate(
+                gated_data_df[stain1.channel], stain1.sign, stain1.value
+            )
+            stain_sannity_check(
+                gated_data_df, "cell", stain1.channel, stain1.sign, stain1.value
+            )
+            all_labels.append("cell")
 
     if stain2.channel is not None:
         """ STAIN FOR LIVE / DEAD (PI) """
         if stain2.channel is not None and stain2.channel != NOT_APPLICABLE:
-            # Initialize the 'state' column with 'not dead'
-            gated_data_df["dead"] = False
-
-            # Apply gating based on the first stain (live/dead)
-            if stain2.sign in [">", "greater_than"]:
-                gated_data_df.loc[
-                    gated_data_df[stain2.channel] > stain2.value, "dead"
-                ] = True
-
-            elif stain2.sign in ["<", "less_than"]:
-                gated_data_df.loc[
-                    gated_data_df[stain2.channel] < stain2.value, "dead"
-                ] = True
-
-            # Sannity check
-            try:
-                stain_sannity_check(
-                    gated_data_df, "dead", stain2.channel, stain2.sign, stain2.value
-                )
-                all_labels.append("dead")
-
-            except Exception as e:
-                raise (
-                    f"Sannity check failed for stain2: {stain2.channel}"
-                ) from e  # Preserve original traceback
+            # Entries where the threshold holds are dead
+            gated_data_df["dead"] = gate(
+                gated_data_df[stain2.channel], stain2.sign, stain2.value
+            )
+            stain_sannity_check(
+                gated_data_df, "dead", stain2.channel, stain2.sign, stain2.value
+            )
+            all_labels.append("dead")
 
     # Apply gating on extra stains
     if extra_stains is not None:
         for channel, details in extra_stains.items():
             sign, threshold, label = details
-            # Create the comparison operator dynamically
-            condition = (
-                gated_data_df[channel] > threshold
-                if sign == ">"
-                else gated_data_df[channel] < threshold
-            )
-            gated_data_df[label] = condition
-            try:
-                stain_sannity_check(gated_data_df, label, channel, sign, threshold)
-            except ValueError as e:
-                raise ValueError(
-                    f"Gating failed for extra stain: {e}"
-                ) from e  # Preserve original traceback
-
+            gated_data_df[label] = gate(gated_data_df[channel], sign, threshold)
+            stain_sannity_check(gated_data_df, label, channel, sign, threshold)
             all_labels.append(label)
 
     return gated_data_df, all_labels

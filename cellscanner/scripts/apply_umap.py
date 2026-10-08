@@ -60,7 +60,7 @@ def process_file(
         print(f"Gating file: {file}")
 
         # Apply gating
-        with open(os.path.join(model_dir, "gating_input_data.txt"), "w") as f:
+        with open(os.path.join(model_dir, "gating_input_data.txt"), "a") as f:
             # Writing species name and original number of entries
             f.write(f"species name: {species_name}\n")
             f.write(f"original number of entries: {df.shape}\n")
@@ -79,21 +79,28 @@ def process_file(
             f.write(f"df.columns: {df.columns.tolist()}\n")
             f.write(f"gated_df.columns: {gated_df.columns.tolist()}\n")
 
-            # Apply gating for stain 1 if channel is not None
+            # Apply gating for stain 1 if channel is not None: keep cells, drop debris
             if isinstance(stain_1, Stain) and stain_1.channel:
-                gating_condition = gated_df["cell"] == False
+                gating_condition = gated_df["cell"] == True
                 gating_condition = gating_condition.reindex(df.index, fill_value=False)
                 df = df[gating_condition]
 
                 f.write(f"number of entries after gating for stain1: {df.shape}\n")
 
-            # Apply gating for stain 2 if channel is not None
+            # Apply gating for stain 2 if channel is not None: keep live, drop dead
             if isinstance(stain_2, Stain) and stain_2.channel:
-                gating_condition = gated_df["dead"] == True
+                gating_condition = gated_df["dead"] == False
                 gating_condition = gating_condition.reindex(df.index, fill_value=False)
                 df = df[gating_condition]
 
                 f.write(f"number of entries after gating for stain2: {df.shape}\n")
+
+            if df.empty:
+                raise ValueError(
+                    f"Gating removed every event of {file} ({species_name}). "
+                    "Please check the gating thresholds."
+                )
+            print(f"{species_name}: {len(df)} events kept after gating.")
 
     # Keep a subset of the entries for the training part
     sampled_df = df.sample(n=min(n_events, len(df)))
@@ -166,6 +173,11 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
     working_directory = params["working_directory"]
     model_dir = os.path.join(working_directory, "model")
     os.makedirs(model_dir, exist_ok=True)
+
+    # gating_input_data.txt is appended to once per input file; start it fresh for each run
+    gating_log = os.path.join(model_dir, "gating_input_data.txt")
+    if os.path.exists(gating_log):
+        os.remove(gating_log)
 
     # Build a map between the species name and their index on the key list
     label_map = {
