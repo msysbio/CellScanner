@@ -329,6 +329,12 @@ def save_prediction_results(
         df = df[df["predictions"] != "Unknown"]
         species_names.remove("Unknown")
 
+    # Blank events are not cells, so live/dead/debris splits do not apply to them; report a single total
+    if "Blank" in species_names:
+        counts_df.loc["Blank"] = {"count": (df["predictions"] == "Blank").sum()}
+        df = df[df["predictions"] != "Blank"]
+        species_names.remove("Blank")
+
     # If both basic stains there, cell/debris precedes
     if {"cell", "dead"}.issubset(df.columns):
         for species in species_names:
