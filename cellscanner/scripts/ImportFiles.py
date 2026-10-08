@@ -229,8 +229,7 @@ class ImportFilePanel(QWidget):
         )
         if output_dir:
             self.output_dir = output_dir
-            if not os.path.exists(output_dir):
-                os.mkdirs(output_dir)
+            os.makedirs(output_dir, exist_ok=True)
             if self.output_dir != self.working_directory:
                 if os.listdir(self.working_directory):
                     shutil.move(self.working_directory, output_dir)

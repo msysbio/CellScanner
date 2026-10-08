@@ -394,5 +394,7 @@ def merge_prediction_results(output_dir, prediction_type):
         merged_filename = f"merged_{pattern}.csv"
         merged_file = os.path.join(output_dir, merged_filename)
         result.to_csv(merged_file, index=True)
-    except:
-        print("No merging case. Please go through the output files of each sample.")
+    except Exception as e:
+        print(
+            f"No merging case ({e}). Please go through the output files of each sample."
+        )

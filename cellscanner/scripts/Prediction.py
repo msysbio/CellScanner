@@ -235,8 +235,8 @@ class PredictionPanel(QWidget, GatingMixin, GatingCheckBox, LiveDeadDebrisSelect
 
                 # Keep dictionary with sample names (key) and their corresponding data_df (value)
                 self.sample_to_df = sample_to_df
-            except:
-                self._on_error("Something went off with your coculture files.")
+            except Exception as e:
+                self._on_error(f"Something went off with your coculture files: {e}")
         else:
             print("No coculture file selected.")
             self.choose_coculture_file_button.setText(select_coculture_message[0])
