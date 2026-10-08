@@ -7,8 +7,7 @@ with the help of a classifier that is trained on mono-cultures.
 It is implemented in Python and compatible with Windows, Mac and Linux.
 See the [installation](../tutorials/install.md) page for how to set it up.
 
-Flow cytometry measures thousands of particles (events) per sample, but on its own it does not tell
-which species an event belongs to. 
+Flow cytometry measures thousands of particdriles (events) per sample, but on its own it does not tell which species an event belongs to. 
 CellScanner learns this from **monocultures**, i.e. samples of a single species, and **blanks**, i.e. samples of the cell-free medium:
 
 1. Optionally, stains such as SYBR-Green and propidium iodide are used to gate out debris and dead cells (*line gating*).
