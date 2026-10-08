@@ -124,7 +124,7 @@ class CellScannerCLI():
 
         for stain in self.extra_stains:
             if stain not in all_channels:
-                raise ValueError(f"Channel provided for gating {stain.channel} not present in the .fcs files provided.")
+                raise ValueError(f"Channel provided for gating {stain} not present in the .fcs files provided.")
 
         print("Valid channel names.")
 
@@ -196,7 +196,8 @@ class CellScannerCLI():
             if 'Time' in data_df.columns:
                 data_df = data_df.drop(columns=['Time'])
 
-            if self.x_axis or self.y_axis or self.z_aixs not in data_df.columns:
+            # Fall back to the first three channels unless all three requested axes exist
+            if not {self.x_axis, self.y_axis, self.z_axis} <= set(data_df.columns):
                 self.x_axis, self.y_axis, self.z_axis = data_df.columns[:3]
 
             # Get thresholds for uncertainty filtering
@@ -283,7 +284,7 @@ def parse_dicts(dir_list: [dict], entity: str, names: str=None):
         # Get pathway
         case_dir_path = case_dir["path"]
         if case_dir_path is None:
-            raise f"Please specify path for the {entity} in the configuration file."
+            raise ValueError(f"Please specify path for the {entity} in the configuration file.")
         if case_dir_path[0] == "~":
             case_dir_path = os.path.expanduser(case_dir_path)
 
@@ -328,9 +329,11 @@ def get_param_value(param: str, conf: dict):
     :param param: Parameter to get their value
     :param conf: Parameters as loaded from the YAML file
     """
-    v = conf.get(param, {}).get("value") or conf.get(param, {}).get("name") or conf.get(param, {}).get("path")
+    # Only fall back to the default when a key is truly empty, so 0 / False are kept
+    entry = conf.get(param) or {}
+    v = next((entry[k] for k in ("value", "name", "path") if entry.get(k) is not None), None)
     if v is None:
-        v = conf.get(param).get("default")
+        v = entry.get("default")
     if v is None and param not in ["prev_trained_model"]:
         raise ValueError(f"Provide a value to the {param} parameter, or set back the default value based on the config.yml template.")
     return v

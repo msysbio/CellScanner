@@ -108,7 +108,7 @@ n_neighbors:
   type: int
 
 umap_min_dist:
-  min_dist: 0.0
+  value: 0.0
   required: false
   default: 0.0
   description: >
