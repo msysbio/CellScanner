@@ -16,8 +16,7 @@ import umap
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
 
-from .GUIhelpers import get_stains_from_panel
-from .helpers import Stain, apply_gating
+from .helpers import Stain, apply_gating, get_stains_from_panel
 from .illustrations import umap_plot
 from .nn import prepare_for_training
 

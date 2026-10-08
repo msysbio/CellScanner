@@ -7,8 +7,13 @@ from scipy.stats import entropy
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics import pairwise_distances
 
-from .GUIhelpers import extact_channel, get_stains_from_panel
-from .helpers import apply_gating, create_file_path, save_gating_results
+from .helpers import (
+    apply_gating,
+    create_file_path,
+    extact_channel,
+    get_stains_from_panel,
+    save_gating_results,
+)
 from .illustrations import (
     create_color_map,
     heterogeneity_bar_plot,
