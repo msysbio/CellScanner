@@ -13,6 +13,8 @@ import argparse
 import fcsparser
 from collections import defaultdict
 
+from scripts import __version__
+
 
 class CellScannerCLI():
 
@@ -409,10 +411,12 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="CellScanner Command Line Interface")
     parser.add_argument("--config", "-c", type=str, required=True, help="Path to the configuration file (.yml)")
+    parser.add_argument("--version", "-v", action="version", version=f"CellScanner {__version__}")
 
     # Parse the arguments
     args = parser.parse_args()
 
+    print(f"CellScanner v{__version__}")
     cs = CellScannerCLI(args)
 
     if cs.model is None:

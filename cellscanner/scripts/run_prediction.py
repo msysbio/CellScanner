@@ -8,6 +8,7 @@ from scipy.stats import entropy
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics import pairwise_distances
 
+from . import __version__
 from .helpers import (
     apply_gating,
     create_file_path,
@@ -256,6 +257,7 @@ def save_prediction_parameters(output_dir, sample, model_dir, settings):
     save_run_parameters(
         params_file,
         {
+            "cellscanner_version": __version__,
             "date": previous.get(
                 "date", datetime.now().astimezone().isoformat(timespec="seconds")
             ),

@@ -1,4 +1,4 @@
-# Configuration template file for CellscannerCLI v2.0.0
+# Configuration template file for CellscannerCLI v2.1.0
 # In this template, we use the test case (input files) under /Testfiles, assuming we have saved them locally
 # on our computer, under ~/software/Cellscanner
 

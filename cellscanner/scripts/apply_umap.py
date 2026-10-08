@@ -17,6 +17,7 @@ import umap
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
 
+from . import __version__
 from .helpers import Stain, apply_gating, save_run_parameters
 from .illustrations import umap_plot
 from .nn import prepare_for_training
@@ -194,6 +195,7 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
     save_run_parameters(
         training_params_file,
         {
+            "cellscanner_version": __version__,
             "date": datetime.now().astimezone().isoformat(timespec="seconds"),
             "interface": "GUI" if gui else "CLI",
             **{k: v for k, v in params.items() if k not in ("stain_1", "stain_2")},
