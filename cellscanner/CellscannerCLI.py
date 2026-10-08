@@ -72,6 +72,7 @@ class CellScannerCLI():
             self.batch_size = get_param_value("batch_size", conf)
             self.early_stopping_patience = get_param_value("early_stopping_patience", conf)
             self.scaling_constant = get_param_value("scaling_constant", conf)
+            self.seed = conf.get("seed", {}).get("value", 42)  # older configs have no seed entry
 
         # Coculture files
         coc_directories = conf.get("coculture_files").get("directories")
@@ -142,7 +143,8 @@ class CellScannerCLI():
             umap_min_dist=self.umap_min_dist, nonblank_threshold=self.nn_non_blank,
             blank_threshold=self.nn_blank, species_files_names_dict=self.all_species,
             blank_files=self.blank_files, working_directory=self.output_dir,
-            stain_1=self.stain1_train, stain_2=self.stain2_train
+            stain_1=self.stain1_train, stain_2=self.stain2_train,
+            seed=self.seed
         )
         print("Files processed. Preparing for training:")
         X_whitened, y_categorical, self.scaler, self.le = prepare_for_training(
@@ -161,7 +163,8 @@ class CellScannerCLI():
             X=X_whitened,
             y=y_categorical,
             species_names=self.le.classes_,
-            working_directory=self.output_dir
+            working_directory=self.output_dir,
+            seed=self.seed
         )
         print("Model complete!")
 
@@ -190,7 +193,7 @@ class CellScannerCLI():
         # Keep the exact configuration file used next to the predictions
         shutil.copy(self.conf, os.path.join(self.predict_dir, "config_used.yml"))
 
-        for sample_file in self.coculture_files:
+        for sample_file in sorted(self.coculture_files):
 
             sample_id = os.path.basename(sample_file)
             sample, _ = os.path.splitext(sample_id)

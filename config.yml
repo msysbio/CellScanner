@@ -177,6 +177,17 @@ early_stopping_patience:
     For more: https://www.tensorflow.org/api_docs/python/tf/keras/callbacks/EarlyStopping
   type: int
 
+seed:
+  value: 42
+  required: false
+  default: 42
+  description: >
+    Random seed used for sampling events, UMAP, the train/validation split and the model initialisation.
+    With the same input files, settings and seed, CellScanner returns the same results on the same machine.
+    Re-run with a few different seeds to check how stable your results are.
+    Note that a fixed seed makes UMAP run single-threaded.
+  type: int
+
 # ---------------------
 # Prediction parameters
 # ---------------------

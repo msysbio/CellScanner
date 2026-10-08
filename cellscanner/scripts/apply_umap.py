@@ -32,6 +32,7 @@ def process_file(
     stain_1: Stain,
     stain_2: Stain,
     model_dir: str,
+    seed: int | None = None,
 ) -> pd.DataFrame:
     """
     Processes import .fcs files by first gating (if asked) and then sampling their entries
@@ -43,6 +44,7 @@ def process_file(
     :param stain_1: User parameters for the (live/dead) staining
     :param stain_2: User parammeters for the (cells/debris) staining
     :param model_dir: Path for model-related output files to be saved
+    :param seed: Random seed for sampling the entries, for reproducible runs
 
     :return: The gated (if asked) and sampled entries of the .fcs file to be used for the model training
     """
@@ -103,7 +105,7 @@ def process_file(
             print(f"{species_name}: {len(df)} events kept after gating.")
 
     # Keep a subset of the entries for the training part
-    sampled_df = df.sample(n=min(n_events, len(df)))
+    sampled_df = df.sample(n=min(n_events, len(df)), random_state=seed)
     sampled_df["Species"] = species_name
 
     return sampled_df
@@ -140,6 +142,7 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
             "species_files_names_dict": TrainPanel.file_panel.species_files,
             "blank_files": TrainPanel.file_panel.blank_files,
             "working_directory": TrainPanel.file_panel.working_directory,
+            "seed": TrainPanel.seed.spin_box.value(),
         }
 
         # NOTE (Haris Zafeiropoulos, 2025-03-31):
@@ -163,6 +166,7 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
             "stain_2",
         ]
         params = {key: kwargs[key] for key in required_keys}
+        params["seed"] = kwargs.get("seed")
         stain_1, stain_2 = params["stain_1"], params["stain_2"]
 
     # Extract parameters into variables for later use
@@ -174,6 +178,7 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
     species_files_names_dict = params["species_files_names_dict"]
     blank_files = params["blank_files"]
     working_directory = params["working_directory"]
+    seed = params["seed"]
     model_dir = os.path.join(working_directory, "model")
     os.makedirs(model_dir, exist_ok=True)
 
@@ -219,6 +224,7 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
                         stain_1=stain_1,
                         stain_2=stain_2,
                         model_dir=model_dir,
+                        seed=seed,
                     )
                 )
             except Exception as e:
@@ -230,7 +236,7 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
     # Process blanks
     blank_dataframes = []
     blank_stain = Stain(channel=None, sign=None, value=None)
-    for blank_file in blank_files:
+    for blank_file in sorted(blank_files):  # sorted: the CLI passes a set, whose order varies between runs
         try:
             blank_dataframes.append(
                 process_file(
@@ -240,6 +246,7 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
                     stain_1=blank_stain,
                     stain_2=blank_stain,
                     model_dir=model_dir,
+                    seed=seed,
                 )
             )
         except Exception as e:
@@ -272,7 +279,10 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
 
     # Init a reducer based on user's settings
     reducer = umap.UMAP(
-        n_components=3, n_neighbors=umap_n_neighbors, min_dist=umap_min_dist
+        n_components=3,
+        n_neighbors=umap_n_neighbors,
+        min_dist=umap_min_dist,
+        random_state=seed,  # NOTE: a fixed random_state makes UMAP run single-threaded
     )
 
     # Run UMAP: Fit and transform the data

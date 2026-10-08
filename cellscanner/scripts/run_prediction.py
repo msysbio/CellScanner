@@ -571,7 +571,7 @@ def hetero_mini_batch(data: pd.DataFrame, species: str = None, type="av_diss"):
         return np.nan
     # Use MiniBatchKMeans as an alternative
     try:
-        kmeans = MiniBatchKMeans(n_clusters=1, batch_size=3080, n_init=3).fit(data)
+        kmeans = MiniBatchKMeans(n_clusters=1, batch_size=3080, n_init=3, random_state=0).fit(data)
     except ValueError:
         raise ValueError("MiniBatchKMeans failed to fit the data.")
 

@@ -312,7 +312,7 @@ def merge_prediction_results(output_dir, prediction_type):
 
         # Loop through all files in the directory
         dfs = []
-        for file_name in os.listdir(output_dir):
+        for file_name in sorted(os.listdir(output_dir)):
             matched_pattern = next(
                 (pattern for pattern in patterns if pattern in file_name), None
             )
@@ -346,7 +346,7 @@ def merge_prediction_results(output_dir, prediction_type):
 
         # Loop through all files in the directory
         dfs = []
-        for file_name in os.listdir(output_dir):
+        for file_name in sorted(os.listdir(output_dir)):
             if pattern not in file_name:
                 continue
             file_path = os.path.join(output_dir, file_name)

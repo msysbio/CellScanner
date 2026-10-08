@@ -9,6 +9,7 @@ from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.utils.class_weight import compute_class_weight
+from tensorflow import keras
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.layers import Dense, Dropout, Input
 from tensorflow.keras.models import Sequential
@@ -26,6 +27,7 @@ def train_neural_network(TrainPanel=None, **kwargs):
         epochs = int(TrainPanel.epochs_combo.combo.currentText())
         batch_size = int(TrainPanel.batch_combo.combo.currentText())
         patience = int(TrainPanel.patience_combo.combo.currentText())
+        seed = TrainPanel.seed.spin_box.value()
         X, y = TrainPanel.X, TrainPanel.y
         species_names = TrainPanel.le.classes_
         working_directory = TrainPanel.file_panel.working_directory
@@ -36,6 +38,7 @@ def train_neural_network(TrainPanel=None, **kwargs):
         epochs = kwargs["epochs"]
         batch_size = kwargs["batch_size"]
         patience = kwargs["patience"]
+        seed = kwargs.get("seed")
         X, y = (
             kwargs["X"],
             kwargs["y"],
@@ -45,6 +48,10 @@ def train_neural_network(TrainPanel=None, **kwargs):
 
     if X is None or y is None:
         raise ValueError("No dataset loaded. Please run prepare_for_training first.")
+
+    # Seed Python, NumPy and TensorFlow (weight initialisation, dropout, shuffling) for reproducible runs
+    if seed is not None:
+        keras.utils.set_random_seed(seed)
 
     # Convert one-hot y back to integer if needed
     y_int = np.argmax(y, axis=1)
@@ -56,7 +63,7 @@ def train_neural_network(TrainPanel=None, **kwargs):
     if fold_count == 0:
         # Just do a single hold-out approach (e.g., 80-20 split)
         X_train, X_val, y_train, y_val = train_test_split(
-            X, y, test_size=0.2, random_state=42, stratify=y_int
+            X, y, test_size=0.2, random_state=seed, stratify=y_int
         )
         print("No cross-validation; using a single train/val split (80-20).")
 
@@ -92,7 +99,7 @@ def train_neural_network(TrainPanel=None, **kwargs):
     # -------------- IF user chooses 5 or 10 folds --------------
     else:
         # Implement StratifiedKFold with that many folds
-        skf = StratifiedKFold(n_splits=fold_count, shuffle=True, random_state=42)
+        skf = StratifiedKFold(n_splits=fold_count, shuffle=True, random_state=seed)
 
         best_accuracy = 0.0
         best_fold = -1
@@ -163,6 +170,7 @@ def train_neural_network(TrainPanel=None, **kwargs):
             "epochs": epochs,
             "batch_size": batch_size,
             "early_stopping_patience": patience,
+            "seed": seed,
             "best_accuracy": best_accuracy,
             "best_fold": best_fold,
             "suggested_uncertainty_threshold": threshold,
