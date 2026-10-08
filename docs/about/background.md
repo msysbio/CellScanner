@@ -22,8 +22,13 @@ CellScanner can be used through a graphical interface ([GUI tutorial](../tutoria
 or the command line ([CLI tutorial](../tutorials/cli.md)).
 
 CellScanner v2 builds on the [first version of the tool](https://github.com/Clem-Jos/CellScanner).
-Bugs and feature requests are tracked on [GitHub](https://github.com/msysbio/CellScanner/issues).
 
 
-Social
-------
+Contact
+-------
+
+- **Bugs and feature requests:** please open an issue on [GitHub](https://github.com/msysbio/CellScanner/issues).
+- **Questions and ideas**, e.g. new or better ways to integrate data: join the
+  [GitHub discussions](https://github.com/msysbio/CellScanner/discussions).
+
+If you have any ideas for future features, feel free to get in touch.
