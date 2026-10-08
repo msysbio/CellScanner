@@ -3,7 +3,6 @@ Helpers functions to support CellScanner main tasks.
 """
 
 import os
-import re
 import sys
 import warnings
 from dataclasses import dataclass
@@ -120,63 +119,6 @@ def gate(series: pd.Series, sign: str, value: float) -> pd.Series:
     raise ValueError(
         f"Unknown sign {sign!r}; use '>'/'greater_than' or '<'/'less_than'."
     )
-
-
-def get_stains_from_panel(Panel):
-    """
-    Build Stain instances for the two main stain types of living/dead and cells/not cells cases.
-    In this case, no label is part of the Stain instance.
-    Function to be used only in the GUI framework.
-
-    Arguments:
-        Panel (:class:`PredictionPanel` | :class:`TrainModelPanel`):
-    Returns:
-        stain1 (Stain)
-        stain2 (Stain)
-    """
-    # Stain 1
-
-    stain_1 = Panel.stain1_selector.combo.currentText()  # It should be the column name
-
-    if stain_1 != NOT_APPLICABLE:
-        match = re.search(
-            r"\[(.*?)\]", stain_1
-        )  # In case we chose a channel with a second name in brackets
-        stain1_channel = match.group(1) if match else stain_1
-        stain1_relation = Panel.stain1_selector.relation.currentText()
-        stain1_threshold = float(Panel.stain1_selector.threshold.text())
-
-        stain1 = Stain(stain1_channel, stain1_relation, stain1_threshold)
-
-    else:
-        stain1 = Stain(channel=None, sign=None, value=None)
-
-    # Stain 2
-    stain_2 = Panel.stain2_selector.combo.currentText()  # It should be the column name
-
-    if stain_2 != NOT_APPLICABLE:
-        match = re.search(r"\[(.*?)\]", stain_2)
-        stain2_channel = match.group(1) if match else stain_2
-        stain2_relation = Panel.stain2_selector.relation.currentText()
-        stain2_threshold = (
-            float(Panel.stain2_selector.threshold.text())
-            if Panel.stain2_selector.threshold.text()
-            else None
-        )
-        stain2 = Stain(stain2_channel, stain2_relation, stain2_threshold)
-
-    else:
-        stain2 = Stain(channel=None, sign=None, value=None)
-
-    return stain1, stain2
-
-
-def extact_channel(long_channel):
-    match = re.search(
-        r"\[(.*?)\]", long_channel
-    )  # In case we chose a channel with a second name in brackets
-    channel = match.group(1) if match else long_channel
-    return channel
 
 
 def stain_sannity_check(df, label, channel, sign, threshold):

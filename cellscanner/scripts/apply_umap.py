@@ -16,7 +16,7 @@ import umap
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
 
-from .helpers import Stain, apply_gating, get_stains_from_panel
+from .helpers import Stain, apply_gating
 from .illustrations import umap_plot
 from .nn import prepare_for_training
 
@@ -124,6 +124,9 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
     """
     gui = False
     if type(TrainPanel).__name__ == "TrainModelPanel":
+        # Imported here so that the CLI, which never takes this branch, does not need PyQt5
+        from .GUIhelpers import get_stains_from_panel
+
         # Read parameters from the GUI
         params = {
             "n_events": int(TrainPanel.event_combo.currentText()),

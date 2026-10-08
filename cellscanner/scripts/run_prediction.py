@@ -7,13 +7,7 @@ from scipy.stats import entropy
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics import pairwise_distances
 
-from .helpers import (
-    apply_gating,
-    create_file_path,
-    extact_channel,
-    get_stains_from_panel,
-    save_gating_results,
-)
+from .helpers import apply_gating, create_file_path, save_gating_results
 from .illustrations import (
     create_color_map,
     heterogeneity_bar_plot,
@@ -35,6 +29,9 @@ def predict(PredictionPanel=None, **kwargs):
     gui = False
 
     if type(PredictionPanel).__name__ == "PredictionPanel":
+        # Imported here so that the CLI, which never takes this branch, does not need PyQt5
+        from .GUIhelpers import extact_channel, get_stains_from_panel
+
         # Attempt to retrieve components from file_panel first
         model, scaler, label_encoder, scaling_constant = get_model_components(
             PredictionPanel.file_panel
