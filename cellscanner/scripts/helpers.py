@@ -378,18 +378,16 @@ def merge_prediction_results(output_dir, prediction_type):
                 continue
             file_path = os.path.join(output_dir, file_name)
 
-            # Read each file as a DataFrame
-            df = pd.read_csv(file_path, sep=",")  # Adjust separator if needed
+            # Read each file as a DataFrame; run_heterogeneity() writes them tab-separated
+            df = pd.read_csv(file_path, sep="\t", index_col="Species")
 
-            # Rename the "count" column to the filename (without extension)
+            # Prefix each metric column with the sample name (filename without the pattern)
             new_column_name = file_name.split(pattern)[0][:-1]
-            df = df.rename(columns={"count": new_column_name})
+            df.columns = [f"{new_column_name}_{c}" for c in df.columns]
             dfs.append(df)
 
-        # Merge all DataFrames on the "predictions" column
-        result = pd.concat(dfs, axis=1).loc[
-            :, ~pd.concat(dfs, axis=1).columns.duplicated()
-        ]
+        # Merge all DataFrames on the species index
+        result = pd.concat(dfs, axis=1)
 
     # Save the final result to a CSV file
     try:

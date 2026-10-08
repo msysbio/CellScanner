@@ -108,7 +108,9 @@ def predict(PredictionPanel=None, **kwargs):
         if (
             uncertainty_threshold < 0 and uncertainty_threshold != -1.0
         ) or uncertainty_threshold > max_entropy:
-            raise ValueError("Uncertainty threshold must be between 0 and 1.")
+            raise ValueError(
+                f"Uncertainty threshold must be between 0 and {max_entropy:.4f} (ln of the number of classes), or -1 for the default."
+            )
 
         elif uncertainty_threshold == -1.0:
             uncertainty_threshold = 0.5 * max_entropy
@@ -222,8 +224,18 @@ def predict_species(
     :return index_to_species (dict): A mapping from class index to species name
     """
 
-    # Select only numeric columns
-    numeric_cols = data_df.select_dtypes(include=[np.number]).columns
+    # Use the channels the scaler was fitted on, in the same order; fall back to the
+    # numeric columns for scalers fitted without feature names
+    features = getattr(scaler, "feature_names_in_", None)
+    if features is not None:
+        missing = set(features) - set(data_df.columns)
+        if missing:
+            raise ValueError(
+                f"Co-culture file lacks channels the model was trained on: {sorted(missing)}"
+            )
+        numeric_cols = list(features)
+    else:
+        numeric_cols = data_df.select_dtypes(include=[np.number]).columns
 
     # Apply arcsinh transformation only to numeric columns
     data_df_arcsinh = data_df.copy()
@@ -323,7 +335,7 @@ def save_prediction_results(
     # If both basic stains there, cell/debris precedes
     if {"cell", "dead"}.issubset(df.columns):
         for species in species_names:
-            # NOTE: If cell column is False, thus threshold holds, entry is a debris
+            # NOTE: If cell column is False, the threshold does not hold and the entry is debris
             sp_debris = df[(df["predictions"] == species) & (df["cell"] == False)]
             counts_df.loc[f"{species}_debris"] = {"count": sp_debris.shape[0]}
 
@@ -333,62 +345,28 @@ def save_prediction_results(
             # Count how many dead/live from the remaining
             # NOTE: If dead column is True then, thus threshold holds, the entry is a dead entry
             sp_dead = df[df["predictions"] == species]["dead"].value_counts()
-            counts_df.loc[f"{species}_live"] = (
-                sp_dead.get(False, None)
-                if False in sp_dead
-                else print(f"Species: {species} has no live entries")
-            )
-            counts_df.loc[f"{species}_dead"] = (
-                sp_dead.get(True, None)
-                if True in sp_dead
-                else print(f"Species: {species} has no dead entries")
-            )
+            counts_df.loc[f"{species}_live"] = sp_dead.get(False, 0)
+            counts_df.loc[f"{species}_dead"] = sp_dead.get(True, 0)
 
     elif "cell" in df.columns:
         for species in species_names:
             sp_debris = df[df["predictions"] == species]["cell"].value_counts()
-            counts_df.loc[f"{species}_debris"] = (
-                sp_debris.get(False, None)
-                if False in sp_debris
-                else print(f"Species: {species} has no debris entries")
-            )
-            counts_df.loc[species] = (
-                sp_debris.get(True, None)
-                if True in sp_debris
-                else print(f"Species: {species} has no entries not being debris.")
-            )
+            counts_df.loc[f"{species}_debris"] = sp_debris.get(False, 0)
+            counts_df.loc[species] = sp_debris.get(True, 0)
 
     elif "dead" in df.columns:
         for species in species_names:
             # Count how many dead/live from the remaining
             sp_dead = df[df["predictions"] == species]["dead"].value_counts()
-            counts_df.loc[f"{species}_live"] = (
-                sp_dead.get(False, None)
-                if False in sp_dead
-                else print(f"Species: {species} has no live entries")
-            )
-            counts_df.loc[f"{species}_dead"] = (
-                sp_dead.get(True, None)
-                if True in sp_dead
-                else print(f"Species: {species} has no dead entries")
-            )
+            counts_df.loc[f"{species}_live"] = sp_dead.get(False, 0)
+            counts_df.loc[f"{species}_dead"] = sp_dead.get(True, 0)
     else:
         if all_labels is not None:
             for label in all_labels:
                 for species in species_names:
                     sp_df = df[df["predictions"] == species][label].value_counts()
-                    counts_df.loc[f"{species}_not_{label}"] = (
-                        sp_df.get(False, None)
-                        if False in sp_df
-                        else print(
-                            f"Species: {species} has no entries of not being {label}"
-                        )
-                    )
-                    counts_df.loc[f"{species}_{label}"] = (
-                        sp_df.get(True, None)
-                        if True in sp_df
-                        else print(f"Species: {species} has no dead entries of {label}")
-                    )
+                    counts_df.loc[f"{species}_not_{label}"] = sp_df.get(False, 0)
+                    counts_df.loc[f"{species}_{label}"] = sp_df.get(True, 0)
                     print(
                         "ATTENTION! In this case the number of entries is not in line with the entries on the .fcs file"
                     )
