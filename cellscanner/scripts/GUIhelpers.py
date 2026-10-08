@@ -442,13 +442,13 @@ def load_fcs_file(fcss):
         # Drop the 'Time' column if it exists
         if "Time" in data_df.columns:
             data_df = data_df.drop(columns=["Time"])
-            sample_file_basename = os.path.basename(fcs)  # fcs.split('/')[-1]
-            sample, _ = os.path.splitext(sample_file_basename)
+        sample_file_basename = os.path.basename(fcs)  # fcs.split('/')[-1]
+        sample, _ = os.path.splitext(sample_file_basename)
 
-            # Ensure only numeric columns are used in combo boxes
-            numeric_columns = data_df.select_dtypes(include=[np.number]).columns
-            sample_numeric_columns[sample_file_basename] = numeric_columns
-            sample_to_df[sample] = data_df
+        # Ensure only numeric columns are used in combo boxes
+        numeric_columns = data_df.select_dtypes(include=[np.number]).columns
+        sample_numeric_columns[sample_file_basename] = numeric_columns
+        sample_to_df[sample] = data_df
 
     return sample_to_df, sample_numeric_columns, numeric_columns, meta
 

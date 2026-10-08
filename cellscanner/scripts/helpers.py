@@ -3,8 +3,8 @@ Helpers functions to support CellScanner main tasks.
 """
 
 import os
-import sys
-from dataclasses import dataclass
+import warnings
+from dataclasses import asdict, dataclass
 from datetime import datetime
 
 import numpy as np
@@ -24,12 +24,8 @@ class Stain:
 
 
 def get_app_dir():
-    """Get absolute path relative to the executable location."""
-    if hasattr(sys, "_MEIPASS"):
-        base_path = sys._MEIPASS
-    else:
-        base_path = os.path.dirname(os.path.abspath(__file__))
-    return base_path
+    """Get the absolute path of the CellScanner scripts directory."""
+    return os.path.dirname(os.path.abspath(__file__))
 
 
 def get_abs_path(relative_path):
@@ -82,6 +78,37 @@ def load_model_from_files(trained_model_dir):
         ) from e
 
 
+def _yaml_safe(value):
+    """Converts Stain instances, numpy scalars and containers to plain types that YAML can write."""
+    if isinstance(value, Stain):
+        return _yaml_safe(asdict(value))
+    if isinstance(value, dict):
+        return {str(k): _yaml_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set, np.ndarray, pd.Index)):
+        return [_yaml_safe(v) for v in value]
+    if isinstance(value, np.generic):
+        return value.item()
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def save_run_parameters(path, params):
+    """
+    Adds ``params`` to the YAML file at ``path`` (creating it if needed), so users can trace
+    which settings were used in a run. Existing keys are overwritten, other keys are kept.
+    """
+    import yaml
+
+    existing = {}
+    if os.path.exists(path):
+        with open(path) as f:
+            existing = yaml.safe_load(f) or {}
+    existing.update(_yaml_safe(params))
+    with open(path, "w") as f:
+        yaml.safe_dump(existing, f, sort_keys=False)
+
+
 def create_file_path(output_dir, sample, name, extension):
     """Helper function to create file paths."""
     if sample:
@@ -106,17 +133,32 @@ def get_channels(channels_df):
     return channels
 
 
+def gate(series: pd.Series, sign: str, value: float) -> pd.Series:
+    """
+    Returns a boolean mask of the entries of ``series`` that meet the threshold.
+    Accepts both the GUI (``>``, ``<``) and the CLI (``greater_than``, ``less_than``) sign spellings.
+    """
+    if sign in (">", "greater_than"):
+        return series > value
+    if sign in ("<", "less_than"):
+        return series < value
+    raise ValueError(
+        f"Unknown sign {sign!r}; use '>'/'greater_than' or '<'/'less_than'."
+    )
+
+
 def stain_sannity_check(df, label, channel, sign, threshold):
     """
     Checks if gating applied for a stain returns both True and False cases.
-    If not, raises an error so the user refines their thresholds.
+    If not, warns the user so they can refine their thresholds; a gate that does not split
+    a file is not necessarily an error (e.g. a clean monoculture above a debris threshold).
     """
-    counts = df[label].value_counts()
-    if True not in counts.index or False not in counts.index:
+    frac = df[label].mean()
+    if frac in (0.0, 1.0):
         stain_min, stain_max = np.min(df[channel]), np.max(df[channel])
-        raise ValueError(
-            f"Invalid gating. Please check the gating thresholds."
-            f"Stain {channel} ranges between {stain_min} and {stain_max}, while current gating thresholds are {sign} {threshold}."
+        warnings.warn(
+            f"Gate {channel} {sign} {threshold} labels {frac:.0%} of the events as '{label}'. "
+            f"Stain {channel} ranges between {stain_min} and {stain_max}."
         )
 
 
@@ -168,79 +210,33 @@ def apply_gating(
     if stain1.channel is not None:
         """ STAIN FOR CELLS / DEBRIS (sybr green) """
         if stain1.channel is not None and stain1.channel != NOT_APPLICABLE:
-            # Initialize the 'state' column with 'not dead'
-            gated_data_df["cell"] = False
-
-            # Apply gating based on the first stain (live/dead)
-            if stain1.sign in [">", "greater_than"]:
-                gated_data_df.loc[
-                    gated_data_df[stain1.channel] > stain1.value, "cell"
-                ] = True
-
-            elif stain1.sign in ["<", "less_than"]:
-                gated_data_df.loc[
-                    gated_data_df[stain1.channel] < stain1.value, "cell"
-                ] = True
-
-            # Sannity check
-            try:
-                stain_sannity_check(
-                    gated_data_df, "cell", stain1.channel, stain1.sign, stain1.value
-                )
-                all_labels.append("cell")
-
-            except Exception as e:
-                raise ValueError(
-                    f"Gating failed for stain1: {stain1.channel}. Original error: {e}"
-                ) from e
+            # Entries where the threshold holds are cells; the rest are debris
+            gated_data_df["cell"] = gate(
+                gated_data_df[stain1.channel], stain1.sign, stain1.value
+            )
+            stain_sannity_check(
+                gated_data_df, "cell", stain1.channel, stain1.sign, stain1.value
+            )
+            all_labels.append("cell")
 
     if stain2.channel is not None:
         """ STAIN FOR LIVE / DEAD (PI) """
         if stain2.channel is not None and stain2.channel != NOT_APPLICABLE:
-            # Initialize the 'state' column with 'not dead'
-            gated_data_df["dead"] = False
-
-            # Apply gating based on the first stain (live/dead)
-            if stain2.sign in [">", "greater_than"]:
-                gated_data_df.loc[
-                    gated_data_df[stain2.channel] > stain2.value, "dead"
-                ] = True
-
-            elif stain2.sign in ["<", "less_than"]:
-                gated_data_df.loc[
-                    gated_data_df[stain2.channel] < stain2.value, "dead"
-                ] = True
-
-            # Sannity check
-            try:
-                stain_sannity_check(
-                    gated_data_df, "dead", stain2.channel, stain2.sign, stain2.value
-                )
-                all_labels.append("dead")
-
-            except Exception as e:
-                raise (
-                    f"Sannity check failed for stain2: {stain2.channel}"
-                ) from e  # Preserve original traceback
+            # Entries where the threshold holds are dead
+            gated_data_df["dead"] = gate(
+                gated_data_df[stain2.channel], stain2.sign, stain2.value
+            )
+            stain_sannity_check(
+                gated_data_df, "dead", stain2.channel, stain2.sign, stain2.value
+            )
+            all_labels.append("dead")
 
     # Apply gating on extra stains
     if extra_stains is not None:
         for channel, details in extra_stains.items():
             sign, threshold, label = details
-            # Create the comparison operator dynamically
-            condition = (
-                gated_data_df[channel] > threshold
-                if sign == ">"
-                else gated_data_df[channel] < threshold
-            )
-            gated_data_df[label] = condition
-            try:
-                stain_sannity_check(gated_data_df, label, channel, sign, threshold)
-            except ValueError as e:
-                raise ValueError(
-                    f"Gating failed for extra stain: {e}"
-                ) from e  # Preserve original traceback
-
+            gated_data_df[label] = gate(gated_data_df[channel], sign, threshold)
+            stain_sannity_check(gated_data_df, label, channel, sign, threshold)
             all_labels.append(label)
 
     return gated_data_df, all_labels
@@ -311,7 +307,7 @@ def merge_prediction_results(output_dir, prediction_type):
 
         # Loop through all files in the directory
         dfs = []
-        for file_name in os.listdir(output_dir):
+        for file_name in sorted(os.listdir(output_dir)):
             matched_pattern = next(
                 (pattern for pattern in patterns if pattern in file_name), None
             )
@@ -345,28 +341,28 @@ def merge_prediction_results(output_dir, prediction_type):
 
         # Loop through all files in the directory
         dfs = []
-        for file_name in os.listdir(output_dir):
+        for file_name in sorted(os.listdir(output_dir)):
             if pattern not in file_name:
                 continue
             file_path = os.path.join(output_dir, file_name)
 
-            # Read each file as a DataFrame
-            df = pd.read_csv(file_path, sep=",")  # Adjust separator if needed
+            # Read each file as a DataFrame; run_heterogeneity() writes them tab-separated
+            df = pd.read_csv(file_path, sep="\t", index_col="Species")
 
-            # Rename the "count" column to the filename (without extension)
+            # Prefix each metric column with the sample name (filename without the pattern)
             new_column_name = file_name.split(pattern)[0][:-1]
-            df = df.rename(columns={"count": new_column_name})
+            df.columns = [f"{new_column_name}_{c}" for c in df.columns]
             dfs.append(df)
 
-        # Merge all DataFrames on the "predictions" column
-        result = pd.concat(dfs, axis=1).loc[
-            :, ~pd.concat(dfs, axis=1).columns.duplicated()
-        ]
+        # Merge all DataFrames on the species index
+        result = pd.concat(dfs, axis=1)
 
     # Save the final result to a CSV file
     try:
         merged_filename = f"merged_{pattern}.csv"
         merged_file = os.path.join(output_dir, merged_filename)
         result.to_csv(merged_file, index=True)
-    except:
-        print("No merging case. Please go through the output files of each sample.")
+    except Exception as e:
+        print(
+            f"No merging case ({e}). Please go through the output files of each sample."
+        )

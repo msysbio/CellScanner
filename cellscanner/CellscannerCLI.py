@@ -6,11 +6,14 @@ Besides using CellScanner throught its GUI, you may use it through a CLI.
 To this end, you should first complete a [`config.yml`](../config.yml) file, providing the necessary parameters.
 """
 import os
+import shutil
 import sys
 import yaml
 import argparse
 import fcsparser
 from collections import defaultdict
+
+from scripts import __version__
 
 
 class CellScannerCLI():
@@ -42,7 +45,7 @@ class CellScannerCLI():
         # PREVIOUSLY TRAINED MODEL
         self.prev_trained_model = get_param_value("prev_trained_model", conf)
         if self.prev_trained_model is not None:
-            print("Loading model from files"..)
+            print("Loading model from files..")
             self.model, self.scaler, self.le = load_model_from_files(self.prev_trained_model)
             self.scaling_constant = get_param_value("scaling_constant", conf)
 
@@ -71,6 +74,7 @@ class CellScannerCLI():
             self.batch_size = get_param_value("batch_size", conf)
             self.early_stopping_patience = get_param_value("early_stopping_patience", conf)
             self.scaling_constant = get_param_value("scaling_constant", conf)
+            self.seed = conf.get("seed", {}).get("value", 42)  # older configs have no seed entry
 
         # Coculture files
         coc_directories = conf.get("coculture_files").get("directories")
@@ -124,7 +128,7 @@ class CellScannerCLI():
 
         for stain in self.extra_stains:
             if stain not in all_channels:
-                raise ValueError(f"Channel provided for gating {stain.channel} not present in the .fcs files provided.")
+                raise ValueError(f"Channel provided for gating {stain} not present in the .fcs files provided.")
 
         print("Valid channel names.")
 
@@ -141,7 +145,8 @@ class CellScannerCLI():
             umap_min_dist=self.umap_min_dist, nonblank_threshold=self.nn_non_blank,
             blank_threshold=self.nn_blank, species_files_names_dict=self.all_species,
             blank_files=self.blank_files, working_directory=self.output_dir,
-            stain_1=self.stain1_train, stain_2=self.stain2_train
+            stain_1=self.stain1_train, stain_2=self.stain2_train,
+            seed=self.seed
         )
         print("Files processed. Preparing for training:")
         X_whitened, y_categorical, self.scaler, self.le = prepare_for_training(
@@ -160,7 +165,8 @@ class CellScannerCLI():
             X=X_whitened,
             y=y_categorical,
             species_names=self.le.classes_,
-            working_directory=self.output_dir
+            working_directory=self.output_dir,
+            seed=self.seed
         )
         print("Model complete!")
 
@@ -186,7 +192,10 @@ class CellScannerCLI():
         )
         os.makedirs(self.predict_dir, exist_ok=True)
 
-        for sample_file in self.coculture_files:
+        # Keep the exact configuration file used next to the predictions
+        shutil.copy(self.conf, os.path.join(self.predict_dir, "config_used.yml"))
+
+        for sample_file in sorted(self.coculture_files):
 
             sample_id = os.path.basename(sample_file)
             sample, _ = os.path.splitext(sample_id)
@@ -196,7 +205,8 @@ class CellScannerCLI():
             if 'Time' in data_df.columns:
                 data_df = data_df.drop(columns=['Time'])
 
-            if self.x_axis or self.y_axis or self.z_aixs not in data_df.columns:
+            # Fall back to the first three channels unless all three requested axes exist
+            if not {self.x_axis, self.y_axis, self.z_axis} <= set(data_df.columns):
                 self.x_axis, self.y_axis, self.z_axis = data_df.columns[:3]
 
             # Get thresholds for uncertainty filtering
@@ -217,7 +227,8 @@ class CellScannerCLI():
                 "gating": self.gating,
                 "scaling_constant": self.scaling_constant,
                 "filter_out_uncertain": self.filter_out_uncertain,
-                "uncertainty_threshold": self.uncertainty_threshold
+                "uncertainty_threshold": self.uncertainty_threshold,
+                "model_dir": self.prev_trained_model or os.path.join(self.output_dir, "model"),
             }
             # Add specific parameters based on gating
             if self.gating:
@@ -283,7 +294,7 @@ def parse_dicts(dir_list: [dict], entity: str, names: str=None):
         # Get pathway
         case_dir_path = case_dir["path"]
         if case_dir_path is None:
-            raise f"Please specify path for the {entity} in the configuration file."
+            raise ValueError(f"Please specify path for the {entity} in the configuration file.")
         if case_dir_path[0] == "~":
             case_dir_path = os.path.expanduser(case_dir_path)
 
@@ -328,9 +339,11 @@ def get_param_value(param: str, conf: dict):
     :param param: Parameter to get their value
     :param conf: Parameters as loaded from the YAML file
     """
-    v = conf.get(param, {}).get("value") or conf.get(param, {}).get("name") or conf.get(param, {}).get("path")
+    # Only fall back to the default when a key is truly empty, so 0 / False are kept
+    entry = conf.get(param) or {}
+    v = next((entry[k] for k in ("value", "name", "path") if entry.get(k) is not None), None)
     if v is None:
-        v = conf.get(param).get("default")
+        v = entry.get("default")
     if v is None and param not in ["prev_trained_model"]:
         raise ValueError(f"Provide a value to the {param} parameter, or set back the default value based on the config.yml template.")
     return v
@@ -398,10 +411,12 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="CellScanner Command Line Interface")
     parser.add_argument("--config", "-c", type=str, required=True, help="Path to the configuration file (.yml)")
+    parser.add_argument("--version", "-v", action="version", version=f"CellScanner {__version__}")
 
     # Parse the arguments
     args = parser.parse_args()
 
+    print(f"CellScanner v{__version__}")
     cs = CellScannerCLI(args)
 
     if cs.model is None:

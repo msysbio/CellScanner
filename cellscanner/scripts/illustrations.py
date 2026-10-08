@@ -166,9 +166,9 @@ def heterogeneity_pie_chart(
     )
     pie_chart_path = os.path.join(
         heterogeneity_dir,
-        f"{sample}_{species}_heterogeneity_pie_chart"
+        f"{sample}_{species}_heterogeneity_pie_chart.html"
         if species
-        else f"{sample}_heterogeneity_pie_chart",
+        else f"{sample}_heterogeneity_pie_chart.html",
     )
     fig1.write_html(pie_chart_path)
 

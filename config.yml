@@ -1,4 +1,4 @@
-# Configuration template file for CellscannerCLI v2.0.0
+# Configuration template file for CellscannerCLI v2.1.0
 # In this template, we use the test case (input files) under /Testfiles, assuming we have saved them locally
 # on our computer, under ~/software/Cellscanner
 
@@ -108,7 +108,7 @@ n_neighbors:
   type: int
 
 umap_min_dist:
-  min_dist: 0.0
+  value: 0.0
   required: false
   default: 0.0
   description: >
@@ -175,6 +175,17 @@ early_stopping_patience:
     a model with an iterative method. In CellScanner's implementation, we monitor the value of the 
     accuracy. Patience stands for the mumber of epochs with no improvement after which training will be stopped.
     For more: https://www.tensorflow.org/api_docs/python/tf/keras/callbacks/EarlyStopping
+  type: int
+
+seed:
+  value: 42
+  required: false
+  default: 42
+  description: >
+    Random seed used for sampling events, UMAP, the train/validation split and the model initialisation.
+    With the same input files, settings and seed, CellScanner returns the same results on the same machine.
+    Re-run with a few different seeds to check how stable your results are.
+    Note that a fixed seed makes UMAP run single-threaded.
   type: int
 
 # ---------------------

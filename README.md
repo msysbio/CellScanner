@@ -37,27 +37,22 @@ predict your species.
 ![gui_main](docs/_static/GUI.png)
 
 
-Keep in mind that the CellScanner GUI is a PyQt5 app, meaning it requires from the host to have a working X11 windowing system.
+Keep in mind that the CellScanner GUI is a PyQt5 app: it needs a desktop session to open its window (on Linux, an X11 or Wayland session).
 
 
 #### Windows
 
-In Windows, you may also follow the steps described above for the Linux and macOS systems.
-If you try through a WSL however, as already mentioned an X11 is required, which you would have to set up on your own.
-
-Alternatively, you can build an `.exe` on your own
-**Attention!** Do not use a WSL. Also, that [`pyinstaller`](https://pyinstaller.org/en/stable/) is available. 
-
-Then, after you make sure you have activated the `cellscanner` conda environment, you may run:
+Run the same steps in the **Anaconda Prompt** (or **Miniforge Prompt**) that comes with your conda installation.
+If you do not have `git`, download the repository as a ZIP file (*Code* → *Download ZIP*) and unzip it instead of cloning.
+Then start CellScanner from the root folder of the repository:
 
 ```bash
-pyinstaller --onefile --icon=logo.ico --add-data "logo.png:." Cellscanner.py
+conda activate cellscanner
+python cellscanner\Cellscanner.py
 ```
 
-<!-- REMEMBER to add link -->
-**.. or** 
-
-you can simply download the `.exe` of CellScanner v2.0 from [here](). 
+Run it directly in Windows rather than in WSL: Windows shows the GUI window itself.
+You can also use the [Docker](#docker) image, which is the simplest way to run the CLI on Windows.
 
 
 
@@ -107,22 +102,32 @@ For the new features that have been added, a manuscript is in process. :pencil:
 
 
 
-## Docker 
+## Docker
 
-In linux, remember to disable access control for local connections first:
+The image runs both the GUI and the CLI. Mount the directory with your input files to `/media`
+in the container: CellScanner reads its inputs from there and writes its findings back to it.
+
+**GUI** (Linux): first allow local connections to your display, then run the image:
 
   ```bash
   xhost +local:
+  docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v ./Testfiles:/media hariszaf/cell_scanner
   ```
 
-  then, you need to run something line:
+**CLI** (no display needed): put your `config.yml` in the mounted directory and use container paths
+(`/media/...`) for the input files in it:
 
   ```bash
-  docker run -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v ./Testfiles:/csFiles  hariszaf/cell_scanner
+  docker run --rm --user $(id -u):$(id -g) -v ./Testfiles:/media hariszaf/cell_scanner python CellscannerCLI.py -c /media/config.yml
   ```
-  
-  where `Testfiles` is the directory where you have you input data, and also, where CellScanner will return its findings, on your local machine. 
 
-  `csFiles` is the output directory of CellScanner within the container, so make sure you always keep it like that in your command. 
+`--user` makes the output files belong to you rather than to root (Linux). In Windows PowerShell, leave it out and
+write the folder as `-v ${PWD}\Testfiles:/media`.
+Use `python CellscannerCLI.py --version` to check which CellScanner version an image contains.
 
+**Building the image** (tagged with the version in `cellscanner/scripts/__init__.py`):
 
+  ```bash
+  VERSION=$(python -c "exec(open('cellscanner/scripts/__init__.py').read()); print(__version__)")
+  docker build --build-arg CELLSCANNER_VERSION=$VERSION -t hariszaf/cell_scanner:$VERSION -t hariszaf/cell_scanner:latest .
+  ```

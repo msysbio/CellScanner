@@ -7,6 +7,7 @@ are kept for the training of the Neural Network step.
 """
 
 import os
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 import fcsparser
@@ -16,8 +17,8 @@ import umap
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
 
-from .GUIhelpers import get_stains_from_panel
-from .helpers import Stain, apply_gating
+from . import __version__
+from .helpers import Stain, apply_gating, save_run_parameters
 from .illustrations import umap_plot
 from .nn import prepare_for_training
 
@@ -32,6 +33,7 @@ def process_file(
     stain_1: Stain,
     stain_2: Stain,
     model_dir: str,
+    seed: int | None = None,
 ) -> pd.DataFrame:
     """
     Processes import .fcs files by first gating (if asked) and then sampling their entries
@@ -43,6 +45,7 @@ def process_file(
     :param stain_1: User parameters for the (live/dead) staining
     :param stain_2: User parammeters for the (cells/debris) staining
     :param model_dir: Path for model-related output files to be saved
+    :param seed: Random seed for sampling the entries, for reproducible runs
 
     :return: The gated (if asked) and sampled entries of the .fcs file to be used for the model training
     """
@@ -60,7 +63,7 @@ def process_file(
         print(f"Gating file: {file}")
 
         # Apply gating
-        with open(os.path.join(model_dir, "gating_input_data.txt"), "w") as f:
+        with open(os.path.join(model_dir, "gating_input_data.txt"), "a") as f:
             # Writing species name and original number of entries
             f.write(f"species name: {species_name}\n")
             f.write(f"original number of entries: {df.shape}\n")
@@ -79,24 +82,31 @@ def process_file(
             f.write(f"df.columns: {df.columns.tolist()}\n")
             f.write(f"gated_df.columns: {gated_df.columns.tolist()}\n")
 
-            # Apply gating for stain 1 if channel is not None
+            # Apply gating for stain 1 if channel is not None: keep cells, drop debris
             if isinstance(stain_1, Stain) and stain_1.channel:
-                gating_condition = gated_df["cell"] == False
+                gating_condition = gated_df["cell"] == True
                 gating_condition = gating_condition.reindex(df.index, fill_value=False)
                 df = df[gating_condition]
 
                 f.write(f"number of entries after gating for stain1: {df.shape}\n")
 
-            # Apply gating for stain 2 if channel is not None
+            # Apply gating for stain 2 if channel is not None: keep live, drop dead
             if isinstance(stain_2, Stain) and stain_2.channel:
-                gating_condition = gated_df["dead"] == True
+                gating_condition = gated_df["dead"] == False
                 gating_condition = gating_condition.reindex(df.index, fill_value=False)
                 df = df[gating_condition]
 
                 f.write(f"number of entries after gating for stain2: {df.shape}\n")
 
+            if df.empty:
+                raise ValueError(
+                    f"Gating removed every event of {file} ({species_name}). "
+                    "Please check the gating thresholds."
+                )
+            print(f"{species_name}: {len(df)} events kept after gating.")
+
     # Keep a subset of the entries for the training part
-    sampled_df = df.sample(n=min(n_events, len(df)))
+    sampled_df = df.sample(n=min(n_events, len(df)), random_state=seed)
     sampled_df["Species"] = species_name
 
     return sampled_df
@@ -118,6 +128,9 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
     """
     gui = False
     if type(TrainPanel).__name__ == "TrainModelPanel":
+        # Imported here so that the CLI, which never takes this branch, does not need PyQt5
+        from .GUIhelpers import get_stains_from_panel
+
         # Read parameters from the GUI
         params = {
             "n_events": int(TrainPanel.event_combo.currentText()),
@@ -130,6 +143,7 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
             "species_files_names_dict": TrainPanel.file_panel.species_files,
             "blank_files": TrainPanel.file_panel.blank_files,
             "working_directory": TrainPanel.file_panel.working_directory,
+            "seed": TrainPanel.seed.spin_box.value(),
         }
 
         # NOTE (Haris Zafeiropoulos, 2025-03-31):
@@ -153,6 +167,7 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
             "stain_2",
         ]
         params = {key: kwargs[key] for key in required_keys}
+        params["seed"] = kwargs.get("seed")
         stain_1, stain_2 = params["stain_1"], params["stain_2"]
 
     # Extract parameters into variables for later use
@@ -164,8 +179,30 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
     species_files_names_dict = params["species_files_names_dict"]
     blank_files = params["blank_files"]
     working_directory = params["working_directory"]
+    seed = params["seed"]
     model_dir = os.path.join(working_directory, "model")
     os.makedirs(model_dir, exist_ok=True)
+
+    # gating_input_data.txt is appended to once per input file; start it fresh for each run
+    gating_log = os.path.join(model_dir, "gating_input_data.txt")
+    if os.path.exists(gating_log):
+        os.remove(gating_log)
+
+    # Keep track of the training settings next to the model; later training steps add to this file
+    training_params_file = os.path.join(model_dir, "training_parameters.yml")
+    if os.path.exists(training_params_file):
+        os.remove(training_params_file)
+    save_run_parameters(
+        training_params_file,
+        {
+            "cellscanner_version": __version__,
+            "date": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "interface": "GUI" if gui else "CLI",
+            **{k: v for k, v in params.items() if k not in ("stain_1", "stain_2")},
+            "stain1_train": stain_1,
+            "stain2_train": stain_2,
+        },
+    )
 
     # Build a map between the species name and their index on the key list
     label_map = {
@@ -189,6 +226,7 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
                         stain_1=stain_1,
                         stain_2=stain_2,
                         model_dir=model_dir,
+                        seed=seed,
                     )
                 )
             except Exception as e:
@@ -200,7 +238,7 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
     # Process blanks
     blank_dataframes = []
     blank_stain = Stain(channel=None, sign=None, value=None)
-    for blank_file in blank_files:
+    for blank_file in sorted(blank_files):  # sorted: the CLI passes a set, whose order varies between runs
         try:
             blank_dataframes.append(
                 process_file(
@@ -210,6 +248,7 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
                     stain_1=blank_stain,
                     stain_2=blank_stain,
                     model_dir=model_dir,
+                    seed=seed,
                 )
             )
         except Exception as e:
@@ -242,7 +281,10 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
 
     # Init a reducer based on user's settings
     reducer = umap.UMAP(
-        n_components=3, n_neighbors=umap_n_neighbors, min_dist=umap_min_dist
+        n_components=3,
+        n_neighbors=umap_n_neighbors,
+        min_dist=umap_min_dist,
+        random_state=seed,  # NOTE: a fixed random_state makes UMAP run single-threaded
     )
 
     # Run UMAP: Fit and transform the data
@@ -277,6 +319,23 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
 
     # Only entries kept after NN filtering are kept to be used for the training of the NN model
     cleaned_data = combined_df.iloc[indices_to_keep]
+
+    # A class left with (almost) no entries is either silently dropped from the model or breaks
+    # the stratified train/validation split, so stop here with an explicit message
+    kept_counts = cleaned_data["Species"].value_counts()
+    print(f"Entries kept per class after NN filtering: {kept_counts.to_dict()}")
+    too_few = {
+        name: int(kept_counts.get(name, 0))
+        for name in label_map
+        if kept_counts.get(name, 0) < 2
+    }
+    if too_few:
+        raise ValueError(
+            f"After nearest-neighbour filtering, too few entries are left for {too_few}. "
+            f"Entries kept per class: {kept_counts.to_dict()}. "
+            "Try lowering the non-blank/blank neighbour thresholds, increasing the number of events, "
+            "or revisiting the gating thresholds."
+        )
 
     # Plot UMAP before filtering
     umap_plot(combined_df, embedding, model_dir, "Before", None)

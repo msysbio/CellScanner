@@ -55,6 +55,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from scripts import __version__
 from scripts.GUIhelpers import button_style
 from scripts.helpers import get_app_dir
 from scripts.ImportFiles import ImportFilePanel
@@ -76,7 +77,7 @@ class NeuralNetworkGUI(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("CellScanner")
+        self.setWindowTitle(f"CellScanner v{__version__}")
         # setGeometry(x, y, width, height) x, y stand for top-left corner
         self.setGeometry(100, 100, 950, 2100)
 

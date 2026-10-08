@@ -162,11 +162,20 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
             "EarlyStopping Patience:", ["5", "10", "15", "20"], "10", self
         )
 
+        # RANDOM SEED (UMAP, event sampling, model initialisation) for reproducible runs
+        self.seed = LabeledSpinBox(
+            "Random seed:", min_value=0, max_value=999999, step=1, default_value=42
+        )
+        self.seed.setToolTip(
+            "Same inputs and seed give the same results; change it to check how stable the results are."
+        )
+
         # Add the widgets to the group box layout
         model_settings_layout.addWidget(self.epochs_combo)
         model_settings_layout.addWidget(self.kfold_combo)
         model_settings_layout.addWidget(self.batch_combo)
         model_settings_layout.addWidget(self.patience_combo)
+        model_settings_layout.addWidget(self.seed)
 
         # Add the QGroupBox to your main layout
         self.train_panel_layout.addWidget(self.model_settings_group)

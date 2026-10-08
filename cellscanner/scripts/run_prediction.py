@@ -1,5 +1,6 @@
 import math
 import os
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -7,8 +8,13 @@ from scipy.stats import entropy
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics import pairwise_distances
 
-from .GUIhelpers import extact_channel, get_stains_from_panel
-from .helpers import apply_gating, create_file_path, save_gating_results
+from . import __version__
+from .helpers import (
+    apply_gating,
+    create_file_path,
+    save_gating_results,
+    save_run_parameters,
+)
 from .illustrations import (
     create_color_map,
     heterogeneity_bar_plot,
@@ -30,15 +36,22 @@ def predict(PredictionPanel=None, **kwargs):
     gui = False
 
     if type(PredictionPanel).__name__ == "PredictionPanel":
+        # Imported here so that the CLI, which never takes this branch, does not need PyQt5
+        from .GUIhelpers import extact_channel, get_stains_from_panel
+
         # Attempt to retrieve components from file_panel first
         model, scaler, label_encoder, scaling_constant = get_model_components(
             PredictionPanel.file_panel
         )
+        model_dir = getattr(PredictionPanel.file_panel, "model_dir", None)
 
         # Fallback to train_panel if not found in file_panel
         if model is None:
             model, scaler, label_encoder, scaling_constant = get_model_components(
                 PredictionPanel.train_panel
+            )
+            model_dir = os.path.join(
+                PredictionPanel.train_panel.file_panel.working_directory, "model"
             )
 
         data_df = PredictionPanel.data_df
@@ -92,6 +105,7 @@ def predict(PredictionPanel=None, **kwargs):
         scaling_constant = kwargs["scaling_constant"]
         filter_out_uncertain = kwargs["filter_out_uncertain"]
         uncertainty_threshold = kwargs["uncertainty_threshold"]
+        model_dir = kwargs.get("model_dir")
         if gating:
             stain1, stain2 = kwargs["stain1"], kwargs["stain2"]
             extra_stains = kwargs["extra_stains"]
@@ -103,13 +117,35 @@ def predict(PredictionPanel=None, **kwargs):
         if (
             uncertainty_threshold < 0 and uncertainty_threshold != -1.0
         ) or uncertainty_threshold > max_entropy:
-            raise ValueError("Uncertainty threshold must be between 0 and 1.")
+            raise ValueError(
+                f"Uncertainty threshold must be between 0 and {max_entropy:.4f} (ln of the number of classes), or -1 for the default."
+            )
 
         elif uncertainty_threshold == -1.0:
             uncertainty_threshold = 0.5 * max_entropy
             print(
                 f"Threshold as 0.5 of max entropy: {uncertainty_threshold}, max entropy: {max_entropy}"
             )
+
+    # Keep track of the settings used in this run in the Prediction folder
+    save_prediction_parameters(
+        output_dir,
+        sample,
+        model_dir,
+        {
+            "interface": "GUI" if gui else "CLI",
+            "scaling_constant": scaling_constant,
+            "filter_out_uncertain": filter_out_uncertain,
+            "uncertainty_threshold": uncertainty_threshold,
+            "gating": gating,
+            "stain1_predict": stain1 if gating else None,
+            "stain2_predict": stain2 if gating else None,
+            "extra_stains": extra_stains if gating else None,
+            "x_axis": x_axis_combo,
+            "y_axis": y_axis_combo,
+            "z_axis": z_axis_combo,
+        },
+    )
 
     # Predict the species in the coculture file
     predicted_classes, uncertainties, index_to_species = predict_species(
@@ -197,6 +233,42 @@ def predict(PredictionPanel=None, **kwargs):
 
 
 # Functions to be used by the predict()
+def save_prediction_parameters(output_dir, sample, model_dir, settings):
+    """
+    Writes the settings of a prediction run to ``run_parameters.yml`` in the Prediction folder.
+    The file is shared by all samples of a run: each call adds its sample to the ``samples`` list.
+    If the model folder has a ``training_parameters.yml``, it is included under ``training``.
+    """
+    import yaml
+
+    params_file = os.path.join(output_dir, "run_parameters.yml")
+    previous = {}
+    if os.path.exists(params_file):
+        with open(params_file) as f:
+            previous = yaml.safe_load(f) or {}
+
+    training = None
+    if model_dir is not None:
+        training_file = os.path.join(model_dir, "training_parameters.yml")
+        if os.path.exists(training_file):
+            with open(training_file) as f:
+                training = yaml.safe_load(f)
+
+    save_run_parameters(
+        params_file,
+        {
+            "cellscanner_version": __version__,
+            "date": previous.get(
+                "date", datetime.now().astimezone().isoformat(timespec="seconds")
+            ),
+            "samples": previous.get("samples", []) + [sample],
+            "model_directory": os.path.abspath(model_dir) if model_dir else None,
+            **settings,
+            "training": training,
+        },
+    )
+
+
 def predict_species(
     data_df: pd.DataFrame,
     model: "tensorflow.keras.Sequential",
@@ -217,8 +289,18 @@ def predict_species(
     :return index_to_species (dict): A mapping from class index to species name
     """
 
-    # Select only numeric columns
-    numeric_cols = data_df.select_dtypes(include=[np.number]).columns
+    # Use the channels the scaler was fitted on, in the same order; fall back to the
+    # numeric columns for scalers fitted without feature names
+    features = getattr(scaler, "feature_names_in_", None)
+    if features is not None:
+        missing = set(features) - set(data_df.columns)
+        if missing:
+            raise ValueError(
+                f"Co-culture file lacks channels the model was trained on: {sorted(missing)}"
+            )
+        numeric_cols = list(features)
+    else:
+        numeric_cols = data_df.select_dtypes(include=[np.number]).columns
 
     # Apply arcsinh transformation only to numeric columns
     data_df_arcsinh = data_df.copy()
@@ -315,10 +397,16 @@ def save_prediction_results(
         df = df[df["predictions"] != "Unknown"]
         species_names.remove("Unknown")
 
+    # Blank events are not cells, so live/dead/debris splits do not apply to them; report a single total
+    if "Blank" in species_names:
+        counts_df.loc["Blank"] = {"count": (df["predictions"] == "Blank").sum()}
+        df = df[df["predictions"] != "Blank"]
+        species_names.remove("Blank")
+
     # If both basic stains there, cell/debris precedes
     if {"cell", "dead"}.issubset(df.columns):
         for species in species_names:
-            # NOTE: If cell column is False, thus threshold holds, entry is a debris
+            # NOTE: If cell column is False, the threshold does not hold and the entry is debris
             sp_debris = df[(df["predictions"] == species) & (df["cell"] == False)]
             counts_df.loc[f"{species}_debris"] = {"count": sp_debris.shape[0]}
 
@@ -328,62 +416,28 @@ def save_prediction_results(
             # Count how many dead/live from the remaining
             # NOTE: If dead column is True then, thus threshold holds, the entry is a dead entry
             sp_dead = df[df["predictions"] == species]["dead"].value_counts()
-            counts_df.loc[f"{species}_live"] = (
-                sp_dead.get(False, None)
-                if False in sp_dead
-                else print(f"Species: {species} has no live entries")
-            )
-            counts_df.loc[f"{species}_dead"] = (
-                sp_dead.get(True, None)
-                if True in sp_dead
-                else print(f"Species: {species} has no dead entries")
-            )
+            counts_df.loc[f"{species}_live"] = sp_dead.get(False, 0)
+            counts_df.loc[f"{species}_dead"] = sp_dead.get(True, 0)
 
     elif "cell" in df.columns:
         for species in species_names:
             sp_debris = df[df["predictions"] == species]["cell"].value_counts()
-            counts_df.loc[f"{species}_debris"] = (
-                sp_debris.get(False, None)
-                if False in sp_debris
-                else print(f"Species: {species} has no debris entries")
-            )
-            counts_df.loc[species] = (
-                sp_debris.get(True, None)
-                if True in sp_debris
-                else print(f"Species: {species} has no entries not being debris.")
-            )
+            counts_df.loc[f"{species}_debris"] = sp_debris.get(False, 0)
+            counts_df.loc[species] = sp_debris.get(True, 0)
 
     elif "dead" in df.columns:
         for species in species_names:
             # Count how many dead/live from the remaining
             sp_dead = df[df["predictions"] == species]["dead"].value_counts()
-            counts_df.loc[f"{species}_live"] = (
-                sp_dead.get(False, None)
-                if False in sp_dead
-                else print(f"Species: {species} has no live entries")
-            )
-            counts_df.loc[f"{species}_dead"] = (
-                sp_dead.get(True, None)
-                if True in sp_dead
-                else print(f"Species: {species} has no dead entries")
-            )
+            counts_df.loc[f"{species}_live"] = sp_dead.get(False, 0)
+            counts_df.loc[f"{species}_dead"] = sp_dead.get(True, 0)
     else:
         if all_labels is not None:
             for label in all_labels:
                 for species in species_names:
                     sp_df = df[df["predictions"] == species][label].value_counts()
-                    counts_df.loc[f"{species}_not_{label}"] = (
-                        sp_df.get(False, None)
-                        if False in sp_df
-                        else print(
-                            f"Species: {species} has no entries of not being {label}"
-                        )
-                    )
-                    counts_df.loc[f"{species}_{label}"] = (
-                        sp_df.get(True, None)
-                        if True in sp_df
-                        else print(f"Species: {species} has no dead entries of {label}")
-                    )
+                    counts_df.loc[f"{species}_not_{label}"] = sp_df.get(False, 0)
+                    counts_df.loc[f"{species}_{label}"] = sp_df.get(True, 0)
                     print(
                         "ATTENTION! In this case the number of entries is not in line with the entries on the .fcs file"
                     )
@@ -519,7 +573,7 @@ def hetero_mini_batch(data: pd.DataFrame, species: str = None, type="av_diss"):
         return np.nan
     # Use MiniBatchKMeans as an alternative
     try:
-        kmeans = MiniBatchKMeans(n_clusters=1, batch_size=3080, n_init=3).fit(data)
+        kmeans = MiniBatchKMeans(n_clusters=1, batch_size=3080, n_init=3, random_state=0).fit(data)
     except ValueError:
         raise ValueError("MiniBatchKMeans failed to fit the data.")
 

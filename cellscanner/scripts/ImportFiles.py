@@ -229,8 +229,7 @@ class ImportFilePanel(QWidget):
         )
         if output_dir:
             self.output_dir = output_dir
-            if not os.path.exists(output_dir):
-                os.mkdirs(output_dir)
+            os.makedirs(output_dir, exist_ok=True)
             if self.output_dir != self.working_directory:
                 if os.listdir(self.working_directory):
                     shutil.move(self.working_directory, output_dir)
@@ -269,6 +268,7 @@ class ImportFilePanel(QWidget):
                     self, "Model loading", "Model files loaded successfully."
                 )
                 self.previously_trained_model_button.setText(trained_model_dir)
+                self.model_dir = trained_model_dir
                 self.model_loaded = self.model is not None
                 self.blank_files = []
                 self.species_files = {}
