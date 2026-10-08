@@ -1,6 +1,5 @@
 __pycache__/
 .vscode/
-*.spec
 
 model/
 Prediction_*/ 
@@ -8,5 +7,7 @@ working_files_*/
 
 _build/
 docs/api/
+docs/autoapi/
+.docs-venv/
 
 CS2TutorialFiles/

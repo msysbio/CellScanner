@@ -44,6 +44,12 @@ Earlier releases are listed on [GitHub](https://github.com/msysbio/CellScanner/t
 - `run_parameters.yml` in each Prediction folder, and `training_parameters.yml` in the model folder,
   recording the settings of each run; the CLI also keeps a copy of its config as `config_used.yml`.
 - Version tracking (`cellscanner/scripts/__init__.py`, `--version`, GUI title, docs).
+- Installation docs for Windows from the source code and with Docker, and a CLI tutorial.
+
+### Removed
+
+- The Windows `.exe` (PyInstaller) build instructions and the code that supported it;
+  on Windows, run CellScanner from the source code or with Docker.
 
 ### Docker
 

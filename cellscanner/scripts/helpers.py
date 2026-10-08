@@ -3,7 +3,6 @@ Helpers functions to support CellScanner main tasks.
 """
 
 import os
-import sys
 import warnings
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -25,12 +24,8 @@ class Stain:
 
 
 def get_app_dir():
-    """Get absolute path relative to the executable location."""
-    if hasattr(sys, "_MEIPASS"):
-        base_path = sys._MEIPASS
-    else:
-        base_path = os.path.dirname(os.path.abspath(__file__))
-    return base_path
+    """Get the absolute path of the CellScanner scripts directory."""
+    return os.path.dirname(os.path.abspath(__file__))
 
 
 def get_abs_path(relative_path):

@@ -37,27 +37,22 @@ predict your species.
 ![gui_main](docs/_static/GUI.png)
 
 
-Keep in mind that the CellScanner GUI is a PyQt5 app, meaning it requires from the host to have a working X11 windowing system.
+Keep in mind that the CellScanner GUI is a PyQt5 app: it needs a desktop session to open its window (on Linux, an X11 or Wayland session).
 
 
 #### Windows
 
-In Windows, you may also follow the steps described above for the Linux and macOS systems.
-If you try through a WSL however, as already mentioned an X11 is required, which you would have to set up on your own.
-
-Alternatively, you can build an `.exe` on your own
-**Attention!** Do not use a WSL. Also, that [`pyinstaller`](https://pyinstaller.org/en/stable/) is available. 
-
-Then, after you make sure you have activated the `cellscanner` conda environment, you may run:
+Run the same steps in the **Anaconda Prompt** (or **Miniforge Prompt**) that comes with your conda installation.
+If you do not have `git`, download the repository as a ZIP file (*Code* → *Download ZIP*) and unzip it instead of cloning.
+Then start CellScanner from the root folder of the repository:
 
 ```bash
-pyinstaller --onefile --icon=logo.ico --add-data "logo.png:." Cellscanner.py
+conda activate cellscanner
+python cellscanner\Cellscanner.py
 ```
 
-<!-- REMEMBER to add link -->
-**.. or** 
-
-you can simply download the `.exe` of CellScanner v2.0 from [here](). 
+Run it directly in Windows rather than in WSL: Windows shows the GUI window itself.
+You can also use the [Docker](#docker) image, which is the simplest way to run the CLI on Windows.
 
 
 
@@ -126,7 +121,8 @@ in the container: CellScanner reads its inputs from there and writes its finding
   docker run --rm --user $(id -u):$(id -g) -v ./Testfiles:/media hariszaf/cell_scanner python CellscannerCLI.py -c /media/config.yml
   ```
 
-`--user` makes the output files belong to you rather than to root.
+`--user` makes the output files belong to you rather than to root (Linux). In Windows PowerShell, leave it out and
+write the folder as `-v ${PWD}\Testfiles:/media`.
 Use `python CellscannerCLI.py --version` to check which CellScanner version an image contains.
 
 **Building the image** (tagged with the version in `cellscanner/scripts/__init__.py`):
