@@ -14,7 +14,6 @@ CellScanner
    :caption: About CellScanner
 
    about/background
-   about/known-issues
    about/history
 
 
