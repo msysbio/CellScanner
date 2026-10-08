@@ -292,6 +292,23 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
     # Only entries kept after NN filtering are kept to be used for the training of the NN model
     cleaned_data = combined_df.iloc[indices_to_keep]
 
+    # A class left with (almost) no entries is either silently dropped from the model or breaks
+    # the stratified train/validation split, so stop here with an explicit message
+    kept_counts = cleaned_data["Species"].value_counts()
+    print(f"Entries kept per class after NN filtering: {kept_counts.to_dict()}")
+    too_few = {
+        name: int(kept_counts.get(name, 0))
+        for name in label_map
+        if kept_counts.get(name, 0) < 2
+    }
+    if too_few:
+        raise ValueError(
+            f"After nearest-neighbour filtering, too few entries are left for {too_few}. "
+            f"Entries kept per class: {kept_counts.to_dict()}. "
+            "Try lowering the non-blank/blank neighbour thresholds, increasing the number of events, "
+            "or revisiting the gating thresholds."
+        )
+
     # Plot UMAP before filtering
     umap_plot(combined_df, embedding, model_dir, "Before", None)
 
