@@ -25,6 +25,7 @@ CellScanner
 
    tutorials/install
    tutorials/gui
+   tutorials/cli
 
 
 .. toctree::
