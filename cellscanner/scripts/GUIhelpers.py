@@ -2,22 +2,32 @@
 A set of classes to support the GUI.
 
 """
+
 import os
 import re
+
 import fcsparser
 import numpy as np
-
 from PyQt5.QtWidgets import (
-    QWidget, QHBoxLayout, QComboBox, QLabel, QLineEdit, QDoubleSpinBox,
-    QSpinBox, QVBoxLayout, QCheckBox
+    QCheckBox,
+    QComboBox,
+    QDoubleSpinBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
 )
 
-from .helpers import Stain, NOT_APPLICABLE
+from .helpers import NOT_APPLICABLE, Stain
+
 
 class AxisSelector(QWidget):
     """
     Box for the user to choose among the channels on the .fcs as the channel to be plotted in the 3D-plots.
     """
+
     def __init__(self, label_text, parent=None):
         super().__init__(parent)
         layout = QHBoxLayout(self)
@@ -26,6 +36,7 @@ class AxisSelector(QWidget):
         layout.addWidget(self.label)
         layout.addWidget(self.combo)
         self.setLayout(layout)  # Set the layout for this widget
+
     def set_items(self, items):
         self.combo.clear()
         self.combo.addItems(items)
@@ -36,6 +47,7 @@ class StainSelector(QWidget):
     Set of boxes for the user to choose among the channels on the .fcs as the channel to be used for a stain,
     its sign (>,<) and to set its value (an integer).
     """
+
     def __init__(self, label_text, tooltip_text, label, parent=None):
         super().__init__(parent)
         layout = QHBoxLayout(self)
@@ -46,7 +58,7 @@ class StainSelector(QWidget):
         self.combo.addItem(NOT_APPLICABLE)
 
         self.relation = QComboBox(self)
-        self.relation.addItems(['>', '<'])
+        self.relation.addItems([">", "<"])
 
         self.threshold = QLineEdit(self)
         self.threshold.setPlaceholderText(
@@ -81,6 +93,7 @@ class LabeledComboBox(QWidget):
         parent (QWidget, optional): The parent widget, if applicable.
 
     """
+
     def __init__(self, label_text, items=None, default=None, parent=None):
         super().__init__(parent)
 
@@ -130,7 +143,16 @@ class LabeledSpinBox(QWidget):
         default_value (int, optional): The default selected value in the spin box. Default is 0.
         parent (QWidget, optional): The parent widget, if applicable.
     """
-    def __init__(self, label_text, min_value=0, max_value=1000, step=1, default_value=0, parent=None):
+
+    def __init__(
+        self,
+        label_text,
+        min_value=0,
+        max_value=1000,
+        step=1,
+        default_value=0,
+        parent=None,
+    ):
         super().__init__(parent)
 
         # Create a horizontal layout for the widget
@@ -143,8 +165,8 @@ class LabeledSpinBox(QWidget):
         # Create and configure the spin box
         self.spin_box = QSpinBox(self)
         self.spin_box.setRange(min_value, max_value)  # Set minimum and maximum values
-        self.spin_box.setSingleStep(step)              # Set step size
-        self.spin_box.setValue(default_value)          # Set default value
+        self.spin_box.setSingleStep(step)  # Set step size
+        self.spin_box.setValue(default_value)  # Set default value
         layout.addWidget(self.spin_box)
 
         # Set the layout on the widget
@@ -191,17 +213,20 @@ class GatingMixin:
     This mixin defines the :func:`toggle_gating_options` method, which shows or hides
     UI elements related to gating based on the state of a checkbox.
     """
+
     def toggle_gating_options(self):
         """Displays or conceals gating options contingent on the gating checkbox state."""
         is_checked = self.gating_checkbox.isChecked()
 
-        if self.get_host_class_name() == "TrainModelPanel":
-
-            if is_checked and len(self.file_panel.blank_files) > 0:
-                # Update all stain selectors
-                for selector in self.stain_selectors:
-                    # selector.set_items(self.file_panel.numeric_columns_set)
-                    selector.set_items(self.file_panel.channels)
+        if (
+            self.get_host_class_name() == "TrainModelPanel"
+            and is_checked
+            and len(self.file_panel.blank_files) > 0
+        ):
+            # Update all stain selectors
+            for selector in self.stain_selectors:
+                # selector.set_items(self.file_panel.numeric_columns_set)
+                selector.set_items(self.file_panel.channels)
 
         for selector in self.stain_selectors:
             selector.label.setVisible(is_checked)
@@ -212,19 +237,20 @@ class GatingMixin:
         try:
             self.new_stain_button.setVisible(is_checked)
         except:
-            print("No need for extra stain at the training step besides the two main ones (SYBR and PI).")
-            pass
+            print(
+                "No need for extra stain at the training step besides the two main ones (SYBR and PI)."
+            )
 
     def get_host_class_name(self):
         return self.__class__.__name__
 
-class GatingCheckBox:
-    """
 
-    """
+class GatingCheckBox:
+    """Class for the gating checkbox and its related message."""
+
     def gating_checkbox(self):
         # Add a checkbox to apply gating
-        self.gating_layout =  QVBoxLayout()
+        self.gating_layout = QVBoxLayout()
         self.gating_checkbox = QCheckBox("Apply line gating", self)
         self.gating_checkbox.setToolTip(_GuiMessages.GATING_CHECHBOX)
         self.gating_layout.addChildWidget(self.gating_checkbox)
@@ -236,10 +262,7 @@ class GatingCheckBox:
 
         # Add message for strain thresholds
         self.thresholds_layout = QHBoxLayout()
-        self.threshold_message = QLabel(
-            _GuiMessages.GATING_THRESHOLD,
-            self
-        )
+        self.threshold_message = QLabel(_GuiMessages.GATING_THRESHOLD, self)
         self.thresholds_layout.addWidget(self.threshold_message)
         try:
             self.predict_panel_layout.addLayout(self.thresholds_layout)
@@ -252,11 +275,22 @@ class LiveDeadDebrisSelectors:
     Mixin class to display the 2 basic stains for live/dead and cells/debris entries.
 
     """
+
     def basic_stains(self):
 
         # Pair of basic stains
-        self.stain1_selector = StainSelector("Staining all cells (e.g. SYBR/DAPI):", _GuiMessages.TP_STAIN_1, "cell", self)
-        self.stain2_selector = StainSelector("Staining inactive (dead) cells (e.g. PI):", _GuiMessages.TP_STAIN_2, "dead", self)
+        self.stain1_selector = StainSelector(
+            "Staining all cells (e.g. SYBR/DAPI):",
+            _GuiMessages.TP_STAIN_1,
+            "cell",
+            self,
+        )
+        self.stain2_selector = StainSelector(
+            "Staining inactive (dead) cells (e.g. PI):",
+            _GuiMessages.TP_STAIN_2,
+            "dead",
+            self,
+        )
 
         try:
             self.predict_panel_layout.addWidget(self.stain1_selector)
@@ -265,10 +299,7 @@ class LiveDeadDebrisSelectors:
             self.train_panel_layout.addWidget(self.stain1_selector)
             self.train_panel_layout.addWidget(self.stain2_selector)
 
-        self.stain_selectors = [
-            self.stain1_selector,
-            self.stain2_selector
-        ]
+        self.stain_selectors = [self.stain1_selector, self.stain2_selector]
 
 
 # ToolTips
@@ -276,6 +307,7 @@ class _GuiMessages:
     """
     Messages to be shown acrross the app.
     """
+
     UNCERTAINTY_TOOLTIP = (
         "Set threshold for filtering out uncertain predictions. "
         "If you just trained a model, CellScanner computed already the threshold allowing the highest accuracy and set it as default. "
@@ -284,14 +316,18 @@ class _GuiMessages:
         "To use the widely used threshold of 0.5 of the maximum entropy, set this value to -1.0 and CellScanner will apply this."
     )
 
-    UNCERTAINTY_CHECKBOX = "Apply filtering on the predictions based on their uncertainty scores."
+    UNCERTAINTY_CHECKBOX = (
+        "Apply filtering on the predictions based on their uncertainty scores."
+    )
 
     USER_STAIN_TOOLTIP = (
         "Select the channel that will be used for gating cells. "
         "All events where the threshold is met will be classified according to the label you provide."
     )
 
-    AXIS_SELECTION = "Choose the Channels that will be used as x, y, z axis for the 3D plot:"
+    AXIS_SELECTION = (
+        "Choose the Channels that will be used as x, y, z axis for the 3D plot:"
+    )
 
     GATING_CHECHBOX = (
         "When staining for both inactive and total cells, CellScanner will also return"
@@ -303,9 +339,7 @@ class _GuiMessages:
         "Ensure you set the threshold based on the raw data, not post-transformation."
     )
 
-    COLUMN_NAMES_ERROR = (
-        "Column names on your coculture files differ. Please make sure you only include files sharing the same column names."
-    )
+    COLUMN_NAMES_ERROR = "Column names on your coculture files differ. Please make sure you only include files sharing the same column names."
 
     PREVIOUSLY_TRAINED_MODEL = (
         "Optional. If you have a model from a previous CellScanner run,"
@@ -318,9 +352,7 @@ class _GuiMessages:
         "Every time you click on the Select Files button, previsouly selected files are removed."
     )
 
-    OUTPUT_DIR = (
-        "Optional. Provide output directory where intermediate files and predictions will be saved."
-    )
+    OUTPUT_DIR = "Optional. Provide output directory where intermediate files and predictions will be saved."
 
     # Stain 1 selection (for debris, optional) sybr-green
     TP_STAIN_1 = (
@@ -353,8 +385,9 @@ def get_stains_from_panel(Panel):
     stain_1 = Panel.stain1_selector.combo.currentText()  # It should be the column name
 
     if stain_1 != NOT_APPLICABLE:
-
-        match = re.search(r"\[(.*?)\]", stain_1)   # In case we chose a channel with a second name in brackets
+        match = re.search(
+            r"\[(.*?)\]", stain_1
+        )  # In case we chose a channel with a second name in brackets
         stain1_channel = match.group(1) if match else stain_1
         stain1_relation = Panel.stain1_selector.relation.currentText()
         stain1_threshold = float(Panel.stain1_selector.threshold.text())
@@ -362,27 +395,32 @@ def get_stains_from_panel(Panel):
         stain1 = Stain(stain1_channel, stain1_relation, stain1_threshold)
 
     else:
-
         stain1 = Stain(channel=None, sign=None, value=None)
 
     # Stain 2
     stain_2 = Panel.stain2_selector.combo.currentText()  # It should be the column name
-    if stain_2 != NOT_APPLICABLE:
 
+    if stain_2 != NOT_APPLICABLE:
         match = re.search(r"\[(.*?)\]", stain_2)
         stain2_channel = match.group(1) if match else stain_2
         stain2_relation = Panel.stain2_selector.relation.currentText()
-        stain2_threshold = float(Panel.stain2_selector.threshold.text()) if Panel.stain2_selector.threshold.text() else None
+        stain2_threshold = (
+            float(Panel.stain2_selector.threshold.text())
+            if Panel.stain2_selector.threshold.text()
+            else None
+        )
         stain2 = Stain(stain2_channel, stain2_relation, stain2_threshold)
 
     else:
-
         stain2 = Stain(channel=None, sign=None, value=None)
 
     return stain1, stain2
 
+
 def extact_channel(long_channel):
-    match = re.search(r"\[(.*?)\]", long_channel)   # In case we chose a channel with a second name in brackets
+    match = re.search(
+        r"\[(.*?)\]", long_channel
+    )  # In case we chose a channel with a second name in brackets
     channel = match.group(1) if match else long_channel
     return channel
 
@@ -402,23 +440,29 @@ def load_fcs_file(fcss):
         meta, data_df = fcsparser.parse(fcs, reformat_meta=True)
 
         # Drop the 'Time' column if it exists
-        if 'Time' in data_df.columns:
-            data_df = data_df.drop(columns=['Time'])
-            sample_file_basename = os.path.basename(fcs)  # fcs.split('/')[-1]
-            sample, _ = os.path.splitext(sample_file_basename)
+        if "Time" in data_df.columns:
+            data_df = data_df.drop(columns=["Time"])
+        sample_file_basename = os.path.basename(fcs)  # fcs.split('/')[-1]
+        sample, _ = os.path.splitext(sample_file_basename)
 
-            # Ensure only numeric columns are used in combo boxes
-            numeric_columns = data_df.select_dtypes(include=[np.number]).columns
-            sample_numeric_columns[sample_file_basename] = numeric_columns
-            sample_to_df[sample] = data_df
+        # Ensure only numeric columns are used in combo boxes
+        numeric_columns = data_df.select_dtypes(include=[np.number]).columns
+        sample_numeric_columns[sample_file_basename] = numeric_columns
+        sample_to_df[sample] = data_df
 
     return sample_to_df, sample_numeric_columns, numeric_columns, meta
 
 
 def button_style(
-    font_size=12, padding=5, color="black", bck_col="#90EE90",
-    bck_col_hov="#7FCF7F", bck_col_clicked="#72B572", radius=5
-    ):
+    font="Helvetica",
+    font_size=14,
+    padding=5,
+    color="black",
+    bck_col="#90EE90",
+    bck_col_hov="#7FCF7F",
+    bck_col_clicked="#72B572",
+    radius=5,
+):
     """
     A button style
     :return style: A string that can be directly assigned as a button-style in PyQt5 apps.

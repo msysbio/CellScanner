@@ -3,6 +3,7 @@
 # -- Path setup --------------------------------------------------------------
 
 import os
+import re
 import sys
 
 # -- Project information -----------------------------------------------------
@@ -12,7 +13,8 @@ project = "CellScanner"
 organization = "Lab of Microbial Systems Biology"
 author = f"{organization} & Contributors"
 copyright = f"2025, {author}"
-version = "0.0.1"
+with open(os.path.join(os.path.dirname(__file__), "..", "cellscanner", "scripts", "__init__.py")) as f:
+    version = re.search(r'__version__ = "(.+?)"', f.read()).group(1)
 release = version
 
 # -- General configuration ---------------------------------------------------

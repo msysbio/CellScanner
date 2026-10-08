@@ -1,142 +1,65 @@
-FROM ubuntu:20.04
+# CellScanner Docker image (GUI and CLI)
+#
+# Build (tag with the version in cellscanner/scripts/__init__.py):
+#   VERSION=$(python -c "exec(open('cellscanner/scripts/__init__.py').read()); print(__version__)")
+#   docker build --build-arg CELLSCANNER_VERSION=$VERSION -t cellscanner:$VERSION -t cellscanner:latest .
+#
+# Run the GUI (Linux; allow local X connections first with `xhost +local:`):
+#   docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v ./Testfiles:/media cellscanner
+#
+# Run the CLI (no display needed; paths in the config refer to the container, e.g. /media/...):
+#   docker run --rm -v ./Testfiles:/media cellscanner python CellscannerCLI.py -c /media/config.yml
+#
+# Input files and outputs live in the directory mounted at /media: when started from /app,
+# CellScanner writes its findings there.
 
-# Set environment variables to make the build non-interactive
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Etc/UTC
+FROM python:3.12-slim-bookworm
 
-# Update and install prerequisites for adding the PPA
-RUN apt-get update && apt-get install -y \
-    software-properties-common \
-    build-essential \
-    libssl-dev \
-    libffi-dev \
-    curl \
-    lsb-release \
-    && add-apt-repository -y ppa:deadsnakes/ppa \
-    && apt-get update \
-    && apt-get install -y \
-    python3.10 \
-    python3.10-dev \
-    python3.10-venv \
-    python3.10-distutils \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+ARG CELLSCANNER_VERSION=unknown
+LABEL org.opencontainers.image.title="CellScanner" \
+      org.opencontainers.image.version="${CELLSCANNER_VERSION}" \
+      org.opencontainers.image.source="https://github.com/msysbio/CellScanner"
 
-# Install pip using the official get-pip.py script
-RUN ln -sf /usr/bin/python3.10 /usr/bin/python
-RUN curl -O https://bootstrap.pypa.io/get-pip.py && python get-pip.py 
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Etc/UTC \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
-# Set the working directory in the container
-WORKDIR /app
-
-# Copy the requirements.txt file to the working directory
-COPY requirements.txt .
-
-RUN pip install -r requirements.txt
-
-RUN apt-get update && \
-    # apt-get install -y libx11-dev libgl1-mesa-dev && \
-    apt-get install -y libx11-dev libgl1-mesa-dev libxcomposite-dev libxrandr-dev libxss-dev libxcursor-dev
-
-RUN apt-get install -y libx11-xcb1 libxcb-xinerama0 libxkbcommon0 libglib2.0-0
-
-
-RUN apt-get update && apt-get install -y \
+# System libraries needed by the Qt (PyQt5) GUI to open windows through X11
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    libdbus-1-3 \
+    libfontconfig1 \
     libx11-xcb1 \
-    libxcb-util1 \
-    # libxcb-xinerama0 \
+    libxkbcommon0 \
+    libxkbcommon-x11-0 \
     libxcb-icccm4 \
     libxcb-image0 \
     libxcb-keysyms1 \
     libxcb-randr0 \
     libxcb-render-util0 \
-    libxcb-render0 \
     libxcb-shape0 \
-    libxcb-shm0 \
-    libxcb-sync1 \
     libxcb-xfixes0 \
+    libxcb-xinerama0 \
     libxcb-xkb1 \
-    x11-utils \
-    libxkbcommon-x11-0
+    && rm -rf /var/lib/apt/lists/*
 
-RUN export QT_QPA_PLATFORM_PLUGIN_PATH=/usr/local/lib/python3.10/dist-packages/PyQt5/Qt5/plugins/platforms
-RUN export QT_DEBUG_PLUGINS=1
+# CellScanner checks for /app to know it runs in the container
+WORKDIR /app
 
+# Install Python dependencies first, so code changes do not invalidate this layer
+COPY requirements.txt .
+RUN pip install -r requirements.txt
 
-# Copy Cellscanner files to the working directory
 COPY cellscanner ./
 
-# Specify the command to run the application (optional)
+# Writable cache locations, so the container also runs as a non-root user (e.g. `--user $(id -u):$(id -g)`, Apptainer):
+# UMAP's numba would otherwise try to cache compiled code inside the read-only site-packages
+ENV NUMBA_CACHE_DIR=/tmp/numba_cache \
+    MPLCONFIGDIR=/tmp/matplotlib \
+    HOME=/tmp
+
+# Default: the GUI. Override the command to run the CLI (see above).
 CMD ["python", "Cellscanner.py"]
-
-
-
-# docker run --rm -it --entrypoint /bin/bash cellscanner
-# docker run -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v .:/media cellscanner
-
-
-
-
-# # FROM DEEPSEEK AS ALTERNATIVE -- NOT WORKING MOUHAHA
-# FROM ubuntu:20.04
-
-# # Set environment variables
-# ENV DEBIAN_FRONTEND=noninteractive \
-#     TZ=Etc/UTC \
-#     QT_QPA_PLATFORM_PLUGIN_PATH=/usr/local/lib/python3.10/dist-packages/PyQt5/Qt5/plugins/platforms \
-#     QT_DEBUG_PLUGINS=1
-
-# # Combine all package installations into a single layer
-# RUN apt-get update && apt-get install -y --no-install-recommends \
-#     software-properties-common \
-#     build-essential \
-#     libssl-dev \
-#     libffi-dev \
-#     curl \
-#     lsb-release \
-#     python3.10 \
-#     python3.10-dev \
-#     python3.10-venv \
-#     python3.10-distutils \
-#     libx11-dev \
-#     libgl1-mesa-dev \
-#     libxcomposite-dev \
-#     libxrandr-dev \
-#     libxss-dev \
-#     libxcursor-dev \
-#     libx11-xcb1 \
-#     libxcb-xinerama0 \
-#     libxkbcommon0 \
-#     libglib2.0-0 \
-#     libxcb-util1 \
-#     libxcb-icccm4 \
-#     libxcb-image0 \
-#     libxcb-keysyms1 \
-#     libxcb-randr0 \
-#     libxcb-render-util0 \
-#     libxcb-render0 \
-#     libxcb-shape0 \
-#     libxcb-shm0 \
-#     libxcb-sync1 \
-#     libxcb-xfixes0 \
-#     libxcb-xkb1 \
-#     x11-utils \
-#     libxkbcommon-x11-0 && \
-#     add-apt-repository -y ppa:deadsnakes/ppa && \
-#     apt-get clean && \
-#     rm -rf /var/lib/apt/lists/*
-
-# # Install pip and setup Python
-# RUN ln -sf /usr/bin/python3.10 /usr/bin/python && \
-#     curl -sS https://bootstrap.pypa.io/get-pip.py | python -
-
-# WORKDIR /app
-
-# # Install Python dependencies first (better layer caching)
-# COPY requirements.txt .
-# RUN pip install --no-cache-dir -r requirements.txt
-
-# # Copy application files
-# COPY cellscanner ./
-
-# CMD ["python", "Cellscanner.py"]

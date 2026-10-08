@@ -30,28 +30,41 @@ Usage:
 - Import Files: Allows users to import monoculture and blank files for analysis.
 - Train Neural Network: Provides an interface to train a neural network model on the imported data.
 - Predict Coculture: Allows users to select a coculture file, predict species within the sample, and optionally apply gating and heterogeneity analysis.
+
+==========================================
+Authors
+==========================================
+    - Ermis Ioannis Michail Delopoulos
+    - Haris Zafeiropoulos
+
+Date: 2024-2026
 """
+
 import os
 import sys
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap, QFont
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout,\
-    QPushButton, QWidget, QLabel, QScrollArea
-
-from scripts.helpers import get_app_dir
+from PyQt5.QtGui import QFont, QPixmap
+from PyQt5.QtWidgets import (
+    QApplication,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
+from scripts import __version__
 from scripts.GUIhelpers import button_style
-from scripts.ImportFiles import  ImportFilePanel
-from scripts.TrainingModel import TrainModelPanel
+from scripts.helpers import get_app_dir
+from scripts.ImportFiles import ImportFilePanel
 from scripts.Prediction import PredictionPanel
+from scripts.TrainingModel import TrainModelPanel
 
-"""
-Authors:
-    - Ermis Ioannis Michail Delopoulos
-    - Haris Zafeiropoulos
+QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
-Date: 2024-2025
-"""
 
 class NeuralNetworkGUI(QMainWindow):
     """
@@ -61,9 +74,10 @@ class NeuralNetworkGUI(QMainWindow):
     - Training (:class:`scripts.TrainingModel.TrainModelPanel`)
     - Prediction (:class:`scripts.Prediction.PredictionPanel`)
     """
+
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("CellScanner")
+        self.setWindowTitle(f"CellScanner v{__version__}")
         # setGeometry(x, y, width, height) x, y stand for top-left corner
         self.setGeometry(100, 100, 950, 2100)
 
@@ -82,19 +96,28 @@ class NeuralNetworkGUI(QMainWindow):
 
         # Create and style the title
         self.title_label = QLabel("CellScanner", self)
-        font = QFont("Arial", 30, QFont.Weight.Bold)
+        font = QFont("Helvetica", 30, QFont.Weight.Bold)
         self.title_label.setFont(font)
         self.title_label.setStyleSheet("color: #2E8B57;")  # Dark sea green color
-        self.title_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.title_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
 
         # Load the logo image
         logo_path = os.path.join(os.path.dirname(get_app_dir()), "logo.png")
 
         self.logo = QPixmap(logo_path)
-        self.logo = self.logo.scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        self.logo = self.logo.scaled(
+            100,
+            100,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
         self.logo_label = QLabel(self)
         self.logo_label.setPixmap(self.logo)
-        self.logo_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.logo_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
 
         # Add the title and logo to the horizontal layout
         title_layout.addWidget(self.title_label)
@@ -113,9 +136,13 @@ class NeuralNetworkGUI(QMainWindow):
         self.import_button = QPushButton("Import Data", self)
         self.import_button.setStyleSheet(
             button_style(
-                font_size=16, padding=10, color="white",
-                bck_col="#3b5998", bck_col_hov="#355089", bck_col_clicked="#2e477a",
-                radius=8
+                font_size=14,
+                padding=10,
+                color="white",
+                bck_col="#3b5998",
+                bck_col_hov="#355089",
+                bck_col_clicked="#2e477a",
+                radius=8,
             )
         )
         self.import_button.clicked.connect(self.toggle_file_panel)
@@ -126,13 +153,19 @@ class NeuralNetworkGUI(QMainWindow):
         self.file_panel.hide()  # Start with the panel hidden
 
         # NOTE: Training panel
-        self.train_panel = TrainModelPanel(self.file_panel, self)  # Instantiate TrainModelPanel with the file pane
+        self.train_panel = TrainModelPanel(
+            self.file_panel, self
+        )  # Instantiate TrainModelPanel with the file pane
         self.train_button = QPushButton("Train Model", self)
         self.train_button.setStyleSheet(
             button_style(
-                font_size=16, padding=10, color="white",
-                bck_col="#3b5998", bck_col_hov="#355089", bck_col_clicked="#2e477a",
-                radius=8
+                font_size=14,
+                padding=10,
+                color="white",
+                bck_col="#3b5998",
+                bck_col_hov="#355089",
+                bck_col_clicked="#2e477a",
+                radius=8,
             )
         )
         self.train_button.clicked.connect(self.toggle_train_panel)
@@ -146,9 +179,13 @@ class NeuralNetworkGUI(QMainWindow):
         self.predict_button = QPushButton("Run Prediction", self)
         self.predict_button.setStyleSheet(
             button_style(
-                font_size=16, padding=10, color="white",
-                bck_col="#3b5998", bck_col_hov="#355089", bck_col_clicked="#2e477a",
-                radius=8
+                font_size=14,
+                padding=10,
+                color="white",
+                bck_col="#3b5998",
+                bck_col_hov="#355089",
+                bck_col_clicked="#2e477a",
+                radius=8,
             )
         )
         self.predict_button.clicked.connect(self.toggle_predict_panel)
@@ -158,7 +195,9 @@ class NeuralNetworkGUI(QMainWindow):
 
         # Create a QScrollArea and set it up
         scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)  # This makes the scroll area resize the content widget accordingly
+        scroll_area.setWidgetResizable(
+            True
+        )  # This makes the scroll area resize the content widget accordingly
         scroll_area.setWidget(central_widget)
 
         # Set the scroll area as the central widget of the main window

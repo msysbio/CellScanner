@@ -2,12 +2,14 @@
 Helpers functions to support CellScanner main tasks.
 """
 
-import os, sys
+import os
+import warnings
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from dataclasses import dataclass
-from typing import Optional
+
 import numpy as np
 import pandas as pd
+
 from .illustrations import gating_plot
 
 NOT_APPLICABLE = "Not applicable"
@@ -18,16 +20,12 @@ class Stain:
     channel: str
     sign: str
     value: float
-    label: Optional[str] = None
+    label: str | None = None
 
 
 def get_app_dir():
-    """Get absolute path relative to the executable location."""
-    if hasattr(sys, '_MEIPASS'):
-        base_path = sys._MEIPASS
-    else:
-        base_path = os.path.dirname(os.path.abspath(__file__))
-    return base_path
+    """Get the absolute path of the CellScanner scripts directory."""
+    return os.path.dirname(os.path.abspath(__file__))
 
 
 def get_abs_path(relative_path):
@@ -36,8 +34,8 @@ def get_abs_path(relative_path):
 
 
 def time_based_dir(prefix, base_path, multiple_cocultures=False):
-    timestamp = datetime.now().strftime("%d-%m-%Y_%H-%M")
-    time_dir_name = "_".join([prefix, timestamp])
+    timestamp = datetime.now().astimezone().strftime("%d-%m-%Y_%H-%M")
+    time_dir_name = f"{prefix}_{timestamp}"
     if os.getcwd() == "/app":
         time_dir = os.path.join("/media", time_dir_name)
     else:
@@ -59,12 +57,14 @@ def load_model_from_files(trained_model_dir):
                                 the user needs to make sure there are all three following files: "trained_model.keras", "scaler.pkl", "label_encoder.pkl"
     :raises ValueError: If any of the 3 required files is missing.
     """
-    print("Loading model from files")
-    from tensorflow.keras.models import load_model
+
     import joblib
+    from tensorflow.keras.models import load_model
 
     modelfiles = ["trained_model.keras", "scaler.pkl", "label_encoder.pkl"]
-    model_path, scaler_path, le_path = [os.path.join(trained_model_dir, x) for x in modelfiles]
+    model_path, scaler_path, le_path = [
+        os.path.join(trained_model_dir, x) for x in modelfiles
+    ]
 
     try:
         model = load_model(model_path)
@@ -73,8 +73,40 @@ def load_model_from_files(trained_model_dir):
         return model, scaler, label_encoder
 
     except Exception as e:
-        print(f"Error loading model or preprocessing objects: {e}")
-        raise ValueError(f"No valid model directory. Check whether all 3 required files are there and valid.")
+        raise ValueError(
+            f"No valid model directory. Check whether all 3 required files are there and valid.error: {e}"
+        ) from e
+
+
+def _yaml_safe(value):
+    """Converts Stain instances, numpy scalars and containers to plain types that YAML can write."""
+    if isinstance(value, Stain):
+        return _yaml_safe(asdict(value))
+    if isinstance(value, dict):
+        return {str(k): _yaml_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set, np.ndarray, pd.Index)):
+        return [_yaml_safe(v) for v in value]
+    if isinstance(value, np.generic):
+        return value.item()
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def save_run_parameters(path, params):
+    """
+    Adds ``params`` to the YAML file at ``path`` (creating it if needed), so users can trace
+    which settings were used in a run. Existing keys are overwritten, other keys are kept.
+    """
+    import yaml
+
+    existing = {}
+    if os.path.exists(path):
+        with open(path) as f:
+            existing = yaml.safe_load(f) or {}
+    existing.update(_yaml_safe(params))
+    with open(path, "w") as f:
+        yaml.safe_dump(existing, f, sort_keys=False)
 
 
 def create_file_path(output_dir, sample, name, extension):
@@ -90,34 +122,52 @@ def get_channels(channels_df):
 
     """
     channels_df["long_channel"] = channels_df.apply(
-        lambda row: f"{row['$PnN']} [{row['$PnS']}]"
-        if row["$PnN"] != row["$PnS"]
-        else row["$PnN"],
-        axis=1
+        lambda row: (
+            f"{row['$PnN']} [{row['$PnS']}]"
+            if row["$PnN"] != row["$PnS"]
+            else row["$PnN"]
+        ),
+        axis=1,
     )
     channels = set(channels_df["long_channel"])
     return channels
 
 
+def gate(series: pd.Series, sign: str, value: float) -> pd.Series:
+    """
+    Returns a boolean mask of the entries of ``series`` that meet the threshold.
+    Accepts both the GUI (``>``, ``<``) and the CLI (``greater_than``, ``less_than``) sign spellings.
+    """
+    if sign in (">", "greater_than"):
+        return series > value
+    if sign in ("<", "less_than"):
+        return series < value
+    raise ValueError(
+        f"Unknown sign {sign!r}; use '>'/'greater_than' or '<'/'less_than'."
+    )
+
+
 def stain_sannity_check(df, label, channel, sign, threshold):
     """
     Checks if gating applied for a stain returns both True and False cases.
-    If not, raises an error so the user refines their thresholds.
+    If not, warns the user so they can refine their thresholds; a gate that does not split
+    a file is not necessarily an error (e.g. a clean monoculture above a debris threshold).
     """
-    counts = df[label].value_counts()
-    if True not in counts.index or False not in counts.index:
+    frac = df[label].mean()
+    if frac in (0.0, 1.0):
         stain_min, stain_max = np.min(df[channel]), np.max(df[channel])
-        raise ValueError(
-            f"Invalid gating. Please check the gating thresholds."
-            f"Stain {channel} ranges between {stain_min} and {stain_max}, while current gating thresholds are {sign} {threshold}."
+        warnings.warn(
+            f"Gate {channel} {sign} {threshold} labels {frac:.0%} of the events as '{label}'. "
+            f"Stain {channel} ranges between {stain_min} and {stain_max}."
         )
 
 
-def apply_gating(data_df: pd.DataFrame,
-                 stain1: Stain = None,
-                 stain2: Stain = None,
-                 extra_stains: dict =None
-    ):
+def apply_gating(
+    data_df: pd.DataFrame,
+    stain1: Stain = None,
+    stain2: Stain = None,
+    extra_stains: dict = None,
+):
     """
     Applies line gating to a dataset based on fluorescence or marker intensity thresholds.
 
@@ -147,74 +197,54 @@ def apply_gating(data_df: pd.DataFrame,
     gated_data_df = data_df.copy()
 
     # Temporarily remove the 'predictions' column to avoid issues with numeric operations -- irrelevant in TRAINING
-    predictions_column = gated_data_df.pop('predictions') if 'predictions' in gated_data_df.columns else None
+    predictions_column = (
+        gated_data_df.pop("predictions")
+        if "predictions" in gated_data_df.columns
+        else None
+    )
 
     # Reintegrate the 'predictions' column after the arcsinh transformation
     if predictions_column is not None:
-        gated_data_df['predictions'] = predictions_column
+        gated_data_df["predictions"] = predictions_column
 
     if stain1.channel is not None:
         """ STAIN FOR CELLS / DEBRIS (sybr green) """
         if stain1.channel is not None and stain1.channel != NOT_APPLICABLE:
-
-            # Initialize the 'state' column with 'not dead'
-            gated_data_df['cell'] = False
-
-            # Apply gating based on the first stain (live/dead)
-            if stain1.sign in ['>', 'greater_than']:
-                gated_data_df.loc[gated_data_df[stain1.channel] > stain1.value, 'cell'] = True
-
-            elif stain1.sign in ['<', 'less_than']:
-                gated_data_df.loc[gated_data_df[stain1.channel] < stain1.value, 'cell'] = True
-
-            # Sannity check
-            try:
-                stain_sannity_check(gated_data_df, "cell", stain1.channel, stain1.sign, stain1.value)
-                all_labels.append("cell")
-
-            except Exception as e:
-                raise ValueError(f"Gating failed for stain1: {stain1.channel}") from e  # Preserve original traceback
+            # Entries where the threshold holds are cells; the rest are debris
+            gated_data_df["cell"] = gate(
+                gated_data_df[stain1.channel], stain1.sign, stain1.value
+            )
+            stain_sannity_check(
+                gated_data_df, "cell", stain1.channel, stain1.sign, stain1.value
+            )
+            all_labels.append("cell")
 
     if stain2.channel is not None:
         """ STAIN FOR LIVE / DEAD (PI) """
         if stain2.channel is not None and stain2.channel != NOT_APPLICABLE:
-
-            # Initialize the 'state' column with 'not dead'
-            gated_data_df['dead'] = False
-
-            # Apply gating based on the first stain (live/dead)
-            if stain2.sign in ['>', 'greater_than']:
-                gated_data_df.loc[gated_data_df[stain2.channel] > stain2.value, 'dead'] = True
-
-            elif stain2.sign in ['<', 'less_than']:
-                gated_data_df.loc[gated_data_df[stain2.channel] < stain2.value, 'dead'] = True
-
-            # Sannity check
-            try:
-                stain_sannity_check(gated_data_df, "dead", stain2.channel, stain2.sign, stain2.value)
-                all_labels.append("dead")
-
-            except Exception as e:
-                raise (f"Sannity check failed for stain2: {stain2.channel}") from e  # Preserve original traceback
+            # Entries where the threshold holds are dead
+            gated_data_df["dead"] = gate(
+                gated_data_df[stain2.channel], stain2.sign, stain2.value
+            )
+            stain_sannity_check(
+                gated_data_df, "dead", stain2.channel, stain2.sign, stain2.value
+            )
+            all_labels.append("dead")
 
     # Apply gating on extra stains
     if extra_stains is not None:
         for channel, details in extra_stains.items():
             sign, threshold, label = details
-            # Create the comparison operator dynamically
-            condition = gated_data_df[channel] > threshold if sign == ">" else gated_data_df[channel] < threshold
-            gated_data_df[label] = condition
-            try:
-                stain_sannity_check(gated_data_df, label, channel, sign, threshold)
-            except ValueError as e:
-                raise ValueError(f"Gating failed for extra stain: {e}") from e  # Preserve original traceback
-
+            gated_data_df[label] = gate(gated_data_df[channel], sign, threshold)
+            stain_sannity_check(gated_data_df, label, channel, sign, threshold)
             all_labels.append(label)
 
     return gated_data_df, all_labels
 
 
-def save_gating_results(gated_data_df, output_dir, sample, x_axis, y_axis, z_axis, all_labels):
+def save_gating_results(
+    gated_data_df, output_dir, sample, x_axis, y_axis, z_axis, all_labels
+):
     """
     Counts entries in a dataframe for its of the labels in all_labels and exports those in a csv file.
     It then calls for the :func:`gating_plot` function to export relative visual components.
@@ -229,21 +259,28 @@ def save_gating_results(gated_data_df, output_dir, sample, x_axis, y_axis, z_axi
     """
 
     # Create a directory for gating results
-    gated_dir = os.path.join(output_dir, 'gated')
+    gated_dir = os.path.join(output_dir, "gated")
     os.makedirs(gated_dir, exist_ok=True)
 
     # Iterate over each species and calculate the state counts
-    species_names = list(gated_data_df['predictions'].unique())
+    species_names = list(gated_data_df["predictions"].unique())
 
-    gated_data_df.to_csv(
-        os.path.join(gated_dir, "_".join([sample, 'raw', 'gating.csv']))
-    )
+    gated_data_df.to_csv(os.path.join(gated_dir, f"{sample}_raw_gating.csv"))
     print(
         f"File with gating raw findings for sample {sample} saved at:\n",
-        os.path.join(gated_dir, "_".join([sample, 'raw', 'gating.csv']))
+        os.path.join(gated_dir, f"{sample}_raw_gating.csv"),
     )
     # Plot status if both stains provided
-    gating_plot(gated_data_df, species_names, x_axis, y_axis, z_axis, gated_dir, sample, all_labels)
+    gating_plot(
+        gated_data_df,
+        species_names,
+        x_axis,
+        y_axis,
+        z_axis,
+        gated_dir,
+        sample,
+        all_labels,
+    )
     print("3D scatter plot for gated data saved to:", gated_dir)
 
 
@@ -256,23 +293,32 @@ def merge_prediction_results(output_dir, prediction_type):
     """
 
     if prediction_type not in ["prediction", "uncertainty"]:
-        raise ValueError(f"Please provide a valide prediction_type: 'prediction|uncertainty'")
+        raise ValueError(
+            "Please provide a valide prediction_type: 'prediction|uncertainty'"
+        )
 
     if prediction_type == "prediction":
-
-        patterns = ["_".join([prediction_type, "counts"]), "state_counts", "dead_counts", "cell_counts" ]
+        patterns = [
+            f"{prediction_type}_counts",
+            "state_counts",
+            "dead_counts",
+            "cell_counts",
+        ]
 
         # Loop through all files in the directory
         dfs = []
-        for file_name in os.listdir(output_dir):
-
-            matched_pattern = next((pattern for pattern in patterns if pattern in file_name), None)
+        for file_name in sorted(os.listdir(output_dir)):
+            matched_pattern = next(
+                (pattern for pattern in patterns if pattern in file_name), None
+            )
             if matched_pattern is None:
                 continue  # Skip files that don't match any pattern
 
             # Read each file as a DataFrame
             file_path = os.path.join(output_dir, file_name)
-            df = pd.read_csv(file_path, index_col = 0)  #  Make sure you keep first column as index of the dataframe
+            df = pd.read_csv(
+                file_path, index_col=0
+            )  #  Make sure you keep first column as index of the dataframe
 
             # Name the "count" column based on the filename (without extension)
             new_column_name = file_name.split(matched_pattern)[0][:-1]
@@ -283,39 +329,40 @@ def merge_prediction_results(output_dir, prediction_type):
 
         # Merge all DataFrames on the "predictions" column
         result = pd.concat(dfs, axis=1)
-        result = result.dropna(how='all')
+        result = result.dropna(how="all")
         unknonws = [x for x in result.index if "Unknown" in x]
         if len(unknonws) > 0:
             sum_unknowns = result.loc[unknonws].sum()
             result = result.drop(index=unknonws)
             result.loc["Unknown"] = sum_unknowns
     else:
-
         pattern = "heterogeneity_results"
         output_dir = os.path.join(output_dir, "heterogeneity_results")
 
         # Loop through all files in the directory
         dfs = []
-        for file_name in os.listdir(output_dir):
+        for file_name in sorted(os.listdir(output_dir)):
             if pattern not in file_name:
                 continue
             file_path = os.path.join(output_dir, file_name)
 
-            # Read each file as a DataFrame
-            df = pd.read_csv(file_path, sep=",")  # Adjust separator if needed
+            # Read each file as a DataFrame; run_heterogeneity() writes them tab-separated
+            df = pd.read_csv(file_path, sep="\t", index_col="Species")
 
-            # Rename the "count" column to the filename (without extension)
+            # Prefix each metric column with the sample name (filename without the pattern)
             new_column_name = file_name.split(pattern)[0][:-1]
-            df = df.rename(columns={"count": new_column_name})
+            df.columns = [f"{new_column_name}_{c}" for c in df.columns]
             dfs.append(df)
 
-        # Merge all DataFrames on the "predictions" column
-        result = pd.concat(dfs, axis=1).loc[:,~pd.concat(dfs, axis=1).columns.duplicated()]
+        # Merge all DataFrames on the species index
+        result = pd.concat(dfs, axis=1)
 
     # Save the final result to a CSV file
     try:
-        merged_filename = "".join(["merged_", pattern, ".csv"])
+        merged_filename = f"merged_{pattern}.csv"
         merged_file = os.path.join(output_dir, merged_filename)
         result.to_csv(merged_file, index=True)
-    except:
-        print("No merging case. Please go through the output files of each sample.")
+    except Exception as e:
+        print(
+            f"No merging case ({e}). Please go through the output files of each sample."
+        )

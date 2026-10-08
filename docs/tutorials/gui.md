@@ -131,6 +131,8 @@ Below is the final result for the six coculture replicates (found in `merged_pre
 | Blank_notdead | 40.0 | 74.0 | 29.0 | 34.0 | 179.0 | 87.0 |
 | Unknown | 3592.0 | 3507.0 | 3995.0 | 3413.0 | 6205.0 | 5126.0 |
 
+Since CellScanner 2.1.0, events classified as blank are reported in a single `Blank` row instead of `Blank_debris` / `Blank_notdead`, as they are not cells.
+
 This table classifies the co-culture events in a number of categories.
 The neural network was trained to distinguish not only species from each other but also from events in the blanks (which do not contain cells). Events labeled as `blank` are therefore co-culture events that the neural network thought are too similar to events encountered in blanks. 
 `debris` refers to events filtered out after classification because their signal was too weak in the specified channel (here FITC-A) and `dead` refers to events with a strong red signal that means that the cell membrane was compromised. Both categories only appear if the corresponding stains were specified.

@@ -14,7 +14,6 @@ CellScanner
    :caption: About CellScanner
 
    about/background
-   about/known-issues
    about/history
 
 
@@ -25,6 +24,7 @@ CellScanner
 
    tutorials/install
    tutorials/gui
+   tutorials/cli
 
 
 .. toctree::
