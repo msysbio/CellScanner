@@ -107,22 +107,31 @@ For the new features that have been added, a manuscript is in process. :pencil:
 
 
 
-## Docker 
+## Docker
 
-In linux, remember to disable access control for local connections first:
+The image runs both the GUI and the CLI. Mount the directory with your input files to `/media`
+in the container: CellScanner reads its inputs from there and writes its findings back to it.
+
+**GUI** (Linux): first allow local connections to your display, then run the image:
 
   ```bash
   xhost +local:
+  docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v ./Testfiles:/media hariszaf/cell_scanner
   ```
 
-  then, you need to run something line:
+**CLI** (no display needed): put your `config.yml` in the mounted directory and use container paths
+(`/media/...`) for the input files in it:
 
   ```bash
-  docker run -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v ./Testfiles:/csFiles  hariszaf/cell_scanner
+  docker run --rm --user $(id -u):$(id -g) -v ./Testfiles:/media hariszaf/cell_scanner python CellscannerCLI.py -c /media/config.yml
   ```
-  
-  where `Testfiles` is the directory where you have you input data, and also, where CellScanner will return its findings, on your local machine. 
 
-  `csFiles` is the output directory of CellScanner within the container, so make sure you always keep it like that in your command. 
+`--user` makes the output files belong to you rather than to root.
+Use `python CellscannerCLI.py --version` to check which CellScanner version an image contains.
 
+**Building the image** (tagged with the version in `cellscanner/scripts/__init__.py`):
 
+  ```bash
+  VERSION=$(python -c "exec(open('cellscanner/scripts/__init__.py').read()); print(__version__)")
+  docker build --build-arg CELLSCANNER_VERSION=$VERSION -t hariszaf/cell_scanner:$VERSION -t hariszaf/cell_scanner:latest .
+  ```
