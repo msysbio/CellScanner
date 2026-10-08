@@ -84,6 +84,8 @@ def train_neural_network(TrainPanel=None, **kwargs):
 
         # Save the trained model
         model.save(os.path.join(model_dir, "trained_model.keras"))
+        trained_model, X_eval, y_eval = model, X_val, y_val
+        best_accuracy, best_fold = val_accuracy, None
 
     # -------------- IF user chooses 5 or 10 folds --------------
     else:
@@ -136,21 +138,21 @@ def train_neural_network(TrainPanel=None, **kwargs):
         fold_idx = 1
         for train_idx, val_idx in skf.split(X, y_int):
             if fold_idx == best_fold:
-                X_val_bf, y_val_bf = X[val_idx], y[val_idx]
+                X_eval, y_eval = X[val_idx], y[val_idx]
                 break
             fold_idx += 1
+        trained_model = best_model
 
     # Save models and stats and calculate threshold
-    trained_model = best_model if "best_model" in locals() else model
     threshold = save_train_stats(
         trained_model,
-        X_val_bf if "X_val_bf" in locals() else X_val,
-        y_val_bf if "y_val_bf" in locals() else y_val,
+        X_eval,
+        y_eval,
         species_names,
         model_dir,
-        best_accuracy if "best_accuracy" in locals() else val_accuracy,
-        best_fold if "best_fold" in locals() else None,
-        fold_count,
+        best_accuracy=best_accuracy,
+        fold_count=fold_count,
+        best_fold=best_fold,
     )
     # Return the best model
     if gui:
@@ -296,22 +298,22 @@ def save_train_stats(
 ):
 
     # Predict validation data
-    conf_matrix_df, class_report_df, threshold = predict_validation(
+    conf_matrix_df, class_report_df, threshold, threshold_curve = predict_validation(
         model, X_val_bf, y_val_bf, species_names
     )
 
     # Save stats
-    print("class_report")
-    print(class_report_df)
-    print("---")
-    print(species_names)
-    if not all(name in class_report_df.index for name in species_names):
-        raise ValueError
+    missing = [name for name in species_names if name not in class_report_df.index]
+    if missing:
+        raise ValueError(f"Species missing from the classification report: {missing}")
 
     stats_path = (
         os.path.join(model_dir, "model_statistics_kfold.csv")
-        if fold_count is not None
+        if fold_count
         else os.path.join(model_dir, "model_statistics.csv")
+    )
+    threshold_curve.to_csv(
+        os.path.join(model_dir, "uncertainty_threshold_curve.csv"), index=False
     )
     with open(stats_path, "w") as f:
         if best_fold is not None:
@@ -361,49 +363,43 @@ def predict_validation(model, X_val_bf, y_val_bf, species_names):
         conf_matrix, index=species_names, columns=species_names
     )
 
-    threshold = calculate_threshold(
+    threshold, threshold_curve = calculate_threshold(
         uncertainties, y_pred_classes, y_true_classes, species_names
     )
 
-    return conf_matrix_df, class_report_df, threshold
+    return conf_matrix_df, class_report_df, threshold, threshold_curve
 
 
-def calculate_threshold(uncertainties, y_pred_classes, y_true_classes, species_names):
+def calculate_threshold(
+    uncertainties, y_pred_classes, y_true_classes, species_names, min_coverage=0.8
+):
     """
-    Returns the threshold that gives the best accuracy, not a quantile but the actual threshold.
-    Thus, its value can be higher than 1.0.
-    """
-    threshold_report = {}
-    max_threshold = math.log2(len(species_names))
+    Returns the entropy threshold with the best accuracy among those keeping at least
+    ``min_coverage`` of the validation events, along with the full accuracy-vs-coverage curve.
 
-    for quantile in range(0, 100, 10):
+    Entropy is in nats (``scipy.stats.entropy`` default), so the maximum is ln(n_classes).
+    Events with entropy above the threshold are the ones :func:`predict` marks as ``Unknown``.
+    Without the coverage constraint, accuracy rises as the threshold tightens and the search
+    would always return the strictest cut-off.
+    """
+    max_threshold = math.log(len(species_names))
+
+    rows = []
+    for quantile in range(5, 101, 5):
         threshold = quantile / 100 * max_threshold
-        try:
-            # Filter out predictions with uncertainty below threshold
-            valid_indices = np.where(uncertainties < threshold)[0]
-            y_pred_classes_filtered = y_pred_classes[valid_indices]
-            y_true_classes_filtered = y_true_classes[valid_indices]
+        keep = uncertainties <= threshold
+        accuracy = (
+            (y_pred_classes[keep] == y_true_classes[keep]).mean()
+            if keep.any()
+            else np.nan
+        )
+        rows.append((threshold, keep.mean(), accuracy))
+    curve = pd.DataFrame(rows, columns=["threshold", "coverage", "accuracy"])
 
-            # Calculate classification report for the threshold under consideration
-            class_report_dict = classification_report(
-                y_true=y_true_classes_filtered,
-                y_pred=y_pred_classes_filtered,
-                target_names=species_names,
-                output_dict=True,
-                zero_division=0,
-            )
-            threshold_report[threshold] = class_report_dict
-        except:
-            print(f"Threshold {threshold} does not return all {len(species_names)}.")
-            threshold_report[threshold] = None
-
-    best_accuracy = 0.0
-    best_threshold = 0.0
-    for threshold, report in threshold_report.items():
-        if report is not None:
-            accuracy = report["accuracy"]
-            if accuracy > best_accuracy:
-                best_accuracy = accuracy
-                best_threshold = threshold
-
-    return best_threshold
+    candidates = curve[curve["coverage"] >= min_coverage].dropna()
+    best = (
+        candidates.loc[candidates["accuracy"].idxmax()]
+        if not candidates.empty
+        else curve.iloc[-1]
+    )
+    return float(best["threshold"]), curve
