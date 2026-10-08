@@ -42,7 +42,7 @@ class CellScannerCLI():
         # PREVIOUSLY TRAINED MODEL
         self.prev_trained_model = get_param_value("prev_trained_model", conf)
         if self.prev_trained_model is not None:
-            print("Loading model from files"..)
+            print("Loading model from files..")
             self.model, self.scaler, self.le = load_model_from_files(self.prev_trained_model)
             self.scaling_constant = get_param_value("scaling_constant", conf)
 
