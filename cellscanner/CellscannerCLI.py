@@ -1,14 +1,19 @@
+#!/usr/bin/env python
+"""
+CellScanner Command Line Interface main class.
+
+Besides using CellScanner throught its GUI, you may use it through a CLI.
+To this end, you should first complete a [`config.yml`](../config.yml) file, providing the necessary parameters.
+"""
 import os
+import shutil
 import sys
 import yaml
 import argparse
 import fcsparser
 from collections import defaultdict
-# Load CellScanner features
-from scripts.apply_umap import process_files
-from scripts.nn import prepare_for_training, train_neural_network
-from scripts.run_prediction import predict, merge_prediction_results
-from scripts.helpers import get_app_dir, time_based_dir, load_model_from_files, Stain
+
+from scripts import __version__
 
 
 class CellScannerCLI():
@@ -24,6 +29,9 @@ class CellScannerCLI():
         # Load config file
         conf = load_yaml(args.config)
 
+        # Load CellScanner features
+        from scripts.helpers import get_app_dir,  load_model_from_files
+
         # Output dir
         outdir = conf.get("output_directory").get("path")
         if os.getcwd() == "/app":
@@ -37,6 +45,7 @@ class CellScannerCLI():
         # PREVIOUSLY TRAINED MODEL
         self.prev_trained_model = get_param_value("prev_trained_model", conf)
         if self.prev_trained_model is not None:
+            print("Loading model from files..")
             self.model, self.scaler, self.le = load_model_from_files(self.prev_trained_model)
             self.scaling_constant = get_param_value("scaling_constant", conf)
 
@@ -65,6 +74,7 @@ class CellScannerCLI():
             self.batch_size = get_param_value("batch_size", conf)
             self.early_stopping_patience = get_param_value("early_stopping_patience", conf)
             self.scaling_constant = get_param_value("scaling_constant", conf)
+            self.seed = conf.get("seed", {}).get("value", 42)  # older configs have no seed entry
 
         # Coculture files
         coc_directories = conf.get("coculture_files").get("directories")
@@ -85,42 +95,58 @@ class CellScannerCLI():
         self.stain1_train, self.stain2_train = None, None
         self.stain1_predict, self.stain2_predict, self.extra_stains = None, None, None
         if self.gating:
+
             # Training
             self.stain1_train = get_stain_params("stain1_train", conf)
             self.stain2_train = get_stain_params("stain2_train", conf)
+
             # Predict
             self.stain1_predict = get_stain_params("stain1_predict", conf)
             self.stain2_predict = get_stain_params("stain2_predict", conf)
+
             # Extra stains for predict
             self.extra_stains = get_extra_stains(conf)
 
             self._channel_sannity_check()
 
     def _channel_sannity_check(self):
-
+        """
+        Checks whether a channel provided by the user is actually amont those on the .fcs files.
+        """
         basic_stains = [self.stain1_train, self.stain2_train, self.stain1_predict, self.stain2_predict]
-        print(self.blank_files)
-        _, data_df = fcsparser.parse(list(self.blank_files)[0], reformat_meta=True)
+
+        if self.prev_trained_model is None:
+            _, data_df = fcsparser.parse(list(self.blank_files)[0], reformat_meta=True)
+        else:
+            _, data_df = fcsparser.parse(list(self.coculture_files)[0], reformat_meta=True)
 
         all_channels = data_df.columns
 
         for stain in basic_stains:
-            if stain.channel not in all_channels:
+            if stain.channel is not None and stain.channel not in all_channels:
                 raise ValueError(f"Channel provided for gating {stain.channel} not present in the .fcs files provided.")
 
         for stain in self.extra_stains:
             if stain not in all_channels:
-                raise ValueError(f"Channel provided for gating {stain.channel} not present in the .fcs files provided.")
+                raise ValueError(f"Channel provided for gating {stain} not present in the .fcs files provided.")
+
         print("Valid channel names.")
 
     def train_model(self):
+        """
+        A wrapper for the main training model - related CellScanner functions.
+        """
+        from scripts.apply_umap import process_files
+        from scripts.nn import prepare_for_training, train_neural_network
+
         print("\nAbout to preprocess input files.")
         cleaned_data = process_files(
             n_events = self.events, umap_n_neighbors=self.n_neighbors,
             umap_min_dist=self.umap_min_dist, nonblank_threshold=self.nn_non_blank,
             blank_threshold=self.nn_blank, species_files_names_dict=self.all_species,
             blank_files=self.blank_files, working_directory=self.output_dir,
-            stain_1=self.stain1_train, stain_2=self.stain2_train
+            stain_1=self.stain1_train, stain_2=self.stain2_train,
+            seed=self.seed
         )
         print("Files processed. Preparing for training:")
         X_whitened, y_categorical, self.scaler, self.le = prepare_for_training(
@@ -139,11 +165,19 @@ class CellScannerCLI():
             X=X_whitened,
             y=y_categorical,
             species_names=self.le.classes_,
-            working_directory=self.output_dir
+            working_directory=self.output_dir,
+            seed=self.seed
         )
         print("Model complete!")
 
     def predict_coculture(self):
+        """
+        A wrapper for the running prediction step - related CellScanner functions.
+        In case where several co-culture files have been provided (samples), CellScanner makes its prediction per sample
+        and in the end merges them in a single file.
+        """
+        from scripts.helpers import time_based_dir, merge_prediction_results
+        from scripts.run_prediction import predict
 
         print("About to start predicting co-culture profiles.")
 
@@ -158,7 +192,10 @@ class CellScannerCLI():
         )
         os.makedirs(self.predict_dir, exist_ok=True)
 
-        for sample_file in self.coculture_files:
+        # Keep the exact configuration file used next to the predictions
+        shutil.copy(self.conf, os.path.join(self.predict_dir, "config_used.yml"))
+
+        for sample_file in sorted(self.coculture_files):
 
             sample_id = os.path.basename(sample_file)
             sample, _ = os.path.splitext(sample_id)
@@ -168,7 +205,8 @@ class CellScannerCLI():
             if 'Time' in data_df.columns:
                 data_df = data_df.drop(columns=['Time'])
 
-            if self.x_axis or self.y_axis or self.z_aixs not in data_df.columns:
+            # Fall back to the first three channels unless all three requested axes exist
+            if not {self.x_axis, self.y_axis, self.z_axis} <= set(data_df.columns):
                 self.x_axis, self.y_axis, self.z_axis = data_df.columns[:3]
 
             # Get thresholds for uncertainty filtering
@@ -189,9 +227,9 @@ class CellScannerCLI():
                 "gating": self.gating,
                 "scaling_constant": self.scaling_constant,
                 "filter_out_uncertain": self.filter_out_uncertain,
-                "uncertainty_threshold": self.uncertainty_threshold
+                "uncertainty_threshold": self.uncertainty_threshold,
+                "model_dir": self.prev_trained_model or os.path.join(self.output_dir, "model"),
             }
-
             # Add specific parameters based on gating
             if self.gating:
                 predict_params.update({
@@ -212,9 +250,13 @@ class CellScannerCLI():
             merge_prediction_results(self.predict_dir, "uncertainty")
 
 
-def load_yaml(yaml_file):
+def load_yaml(yaml_file: str):
     """
     Load a yaml file
+
+    :param yaml_file: path to the YAML file
+    :return: A ``dict`` with the YAML file parameters
+    :rtype: dict
     """
     with open(yaml_file, 'r') as f:
         try:
@@ -225,26 +267,21 @@ def load_yaml(yaml_file):
             sys.exit(1)
 
 
-def parse_dicts(dir_list, entity, names=None):
+def parse_dicts(dir_list: [dict], entity: str, names: str=None):
     """
-   Processes a list of directory info to extract file paths and optionally map them to names.
+    Processes a list of directory info to extract file paths and optionally map them to names.
+    If ``names`` is provided, returns a ``tuple`` including a set of file paths and a dictionary with the labels assigned as keys
+    and their corresponding files as values.
+    Otherwise, returns only the set of file paths.
 
-    Parameters:
-    -----------
-    dir_list : list of dicts
-        List containing directory info, each with 'path' and 'filenames'.
-    entity : str
-        The entity being processed (e.g., "species_files").
-    names : str, optional
-        The key to map filenames to names (labels). If omitted, only file paths are returned.
+    :param dir_list: List containing directory info, each with 'path' and 'filenames'.
+    :param entity: The entity being processed (e.g., "species_files").
+    :param names  The key to map filenames to names (labels). If omitted, only file paths are returned.
 
-    Returns:
-    --------
-    set or tuple
-        - If `names` is provided, returns a tuple of:
-            - A set of file paths.
-            - A dictionary mapping names to file paths.
-        - Otherwise, returns only the set of file paths.
+    :return all_files: A set of file paths
+    :rtype: set
+    :retur all_maps: A dictionary mapping names to file paths.
+    :rtype: dict
     """
     all_files = set()
     if names:
@@ -257,7 +294,7 @@ def parse_dicts(dir_list, entity, names=None):
         # Get pathway
         case_dir_path = case_dir["path"]
         if case_dir_path is None:
-            raise f"Please specify path for the {entity} in the configuration file."
+            raise ValueError(f"Please specify path for the {entity} in the configuration file.")
         if case_dir_path[0] == "~":
             case_dir_path = os.path.expanduser(case_dir_path)
 
@@ -295,21 +332,28 @@ def parse_dicts(dir_list, entity, names=None):
     return (all_files, all_maps) if names else all_files
 
 
-def get_param_value(param, conf):
-    v = conf.get(param, {}).get("value") or conf.get(param, {}).get("name") or conf.get(param, {}).get("path")
+def get_param_value(param: str, conf: dict):
+    """
+    Get values of a specific parameter from the YAML configuration file
+
+    :param param: Parameter to get their value
+    :param conf: Parameters as loaded from the YAML file
+    """
+    # Only fall back to the default when a key is truly empty, so 0 / False are kept
+    entry = conf.get(param) or {}
+    v = next((entry[k] for k in ("value", "name", "path") if entry.get(k) is not None), None)
     if v is None:
-        v = conf.get(param).get("default")
+        v = entry.get("default")
     if v is None and param not in ["prev_trained_model"]:
         raise ValueError(f"Provide a value to the {param} parameter, or set back the default value based on the config.yml template.")
     return v
 
 
-def get_extra_stains(conf):
+def get_extra_stains(conf: dict):
     """
     Get extra stains provided by the user
 
-    :return extra_stains (Dict): A dictionary with channel name as key and a set with the sign, threshold and label
-    of the stain as value
+    :return: A dictionary with channel name as key and a set with the sign, threshold and label of the stain as their value
     """
     extra_stains = {}
     extras = conf.get("extra_stains").get("stains")
@@ -323,9 +367,13 @@ def get_extra_stains(conf):
     return extra_stains
 
 
-def get_stain_params(stain, conf):
+def get_stain_params(stain: str, conf: dict):
     """
     Build a Stain instance based on the configuration file.
+
+    :param stain: Stain entry on the config.yaml file; it can take one of the following values:
+    ``stain1_train``, ``stain2_train``, ``stain1_predict``, ``stain2_predict``, ``extra_stains``
+    :param conf: A dictionary with channel name as key and a set with the sign, threshold and label of the stain as their value
     """
     # Get params from the yaml file
     params = conf.get(stain)
@@ -335,11 +383,25 @@ def get_stain_params(stain, conf):
     return build_stain(stain, channel, sign, value)
 
 
-def build_stain(stain, channel, sign, value):
+def build_stain(stain: str, channel: str, sign: str, value: int):
+    """
+    Builds a :class:`Stain`  based on the user's settings, as loaded by the :func:`get_stain_params`
+
+    :param stain: Stain name as mentioned in the configuration YAML file to in process
+    :param channel: Name of the channel
+    :param channel: Sign of the relationship needs to hold; can be either ``>``, ``<`` in the GUI version,
+    or ``higher_than``, ``lower_than`` in the CLI
+    :param value: Threshold of the channel value
+    """
+    from scripts.helpers import Stain
+
     # Check if all stain params are there
-    if not all([sign, value]) and channel!=None:
+    if not all([sign, value]) and channel is not None:
         missing = [k for k, v in {"channel": channel, "sign": sign, "value": value}.items() if v is None]
         raise ValueError(f"Please provide {' and '.join(missing)} for {stain}.")
+
+    elif channel is None:
+        return Stain(channel=None, sign=None, value=None)
 
     return Stain(channel=channel, sign=sign, value=value)
 
@@ -349,10 +411,12 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="CellScanner Command Line Interface")
     parser.add_argument("--config", "-c", type=str, required=True, help="Path to the configuration file (.yml)")
+    parser.add_argument("--version", "-v", action="version", version=f"CellScanner {__version__}")
 
     # Parse the arguments
     args = parser.parse_args()
 
+    print(f"CellScanner v{__version__}")
     cs = CellScannerCLI(args)
 
     if cs.model is None:

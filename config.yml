@@ -1,4 +1,4 @@
-# Configuration template file for CellscannerCLI v2.0.0
+# Configuration template file for CellscannerCLI v2.1.0
 # In this template, we use the test case (input files) under /Testfiles, assuming we have saved them locally
 # on our computer, under ~/software/Cellscanner
 
@@ -6,7 +6,7 @@
 # Import data
 # ---------------------
 output_directory:
-  path: CellScanner/cs_output
+  path: Testfiles/cs_output
   required: false
   description: >
     Directory where CellScanner will save intermediate files and findings.
@@ -18,7 +18,7 @@ output_directory:
 blank_files:
   directories:
     - directory:
-        path: CellScanner/CS2TutorialFiles
+        path: Testfiles/CS2TutorialFiles
         filenames:
           - 01-t12_d50_wc_btri_control-H7.fcs
           - 01-t12_d50_wc_btri_control-H8.fcs
@@ -34,7 +34,7 @@ blank_files:
 species_files:
   directories:
     - directory:
-        path: CellScanner/CS2TutorialFiles
+        path: Testfiles/CS2TutorialFiles
         filenames:
           - 01-t12_d50_wc_btA-D1.fcs
           - 01-t12_d50_wc_btB-D2.fcs
@@ -60,7 +60,7 @@ species_files:
 coculture_files:
   directories:
     - directory:
-        path: CellScanner/CS2TutorialFiles
+        path: Testfiles/CS2TutorialFiles
         filenames:
           - 01-t12_d50_wc_btriA-D7.fcs
           - 01-t12_d50_wc_btriB-D8.fcs
@@ -73,7 +73,7 @@ coculture_files:
     You can use both relative paths and paths based on the home directory (~).
 
 prev_trained_model:
-  path:
+  path: Testfiles/cs_output/model
   required: false
   default:
   description: >
@@ -108,7 +108,7 @@ n_neighbors:
   type: int
 
 umap_min_dist:
-  min_dist: 0.0
+  value: 0.0
   required: false
   default: 0.0
   description: >
@@ -177,6 +177,17 @@ early_stopping_patience:
     For more: https://www.tensorflow.org/api_docs/python/tf/keras/callbacks/EarlyStopping
   type: int
 
+seed:
+  value: 42
+  required: false
+  default: 42
+  description: >
+    Random seed used for sampling events, UMAP, the train/validation split and the model initialisation.
+    With the same input files, settings and seed, CellScanner returns the same results on the same machine.
+    Re-run with a few different seeds to check how stable your results are.
+    Note that a fixed seed makes UMAP run single-threaded.
+  type: int
+
 # ---------------------
 # Prediction parameters
 # ---------------------
@@ -205,8 +216,8 @@ z_axis:
   type: str
 
 filter_out_uncertain:
-  value: false
-  threshold: 0.5
+  value: true
+  threshold: 0.6
   required: false
   default: false
   description: >
@@ -225,13 +236,6 @@ filter_out_uncertain:
 # ---------------------
 # Gating parameters
 # ---------------------
-gating:
-  value: true
-  required: false
-  default: false
-  description: >
-    Set whether you wish data to be gated or not.
-  type: bool
 
 #   -------------------------      For all stains     -------------------------
 #
@@ -257,10 +261,28 @@ gating:
 #     label:
 #
 
+gating:
+  value: true
+  required: false
+  default: false
+  description: >
+    Set whether you wish data to be gated or not.
+  type: bool
+
 stain1_train:
-  channel: FITC-A
-  sign: greater_than
-  value: 2000000
+  channel:
+  sign:
+  value:
+  description: >
+    This stain specifically describes total cells; 
+    all events where the threshold is met will be classified as `cells`. The rest of the events will be classified as `debris`.
+  required: false
+  type: Stain
+
+stain2_train:
+  channel:
+  sign:
+  value:
   required: false
   sign_values:
     - greater_than
@@ -270,34 +292,27 @@ stain1_train:
     Any event meeting the threshold will be classified as `dead`.
   type: Stain
 
-stain2_train:
-  channel: PerCP-H
-  sign: greater_than
-  value: 500000
-  description: >
-    This stain specifically describes total cells; 
-    all events where the threshold is met will be classified as `cells`. The rest of the events will be classified as `debris`.
-  required: false
-  type: Stain
-
+# DNA stain: cells - debris  ("$LABEL_debris";)  SYBR Green --  FITC-A
 stain1_predict:
   channel: FITC-A
+  sign: greater_than
+  value: 500000
+  required: false
+  description: >
+    This stain specifically describes total cells.
+    All events meeting the threshold will be classified as `cell`. The rest of the events will be classified as `debris`.
+  type: Stain
+
+# Dead/live stain: dead - live ("$LABEL_dead")  PI -- PerCP-H
+stain2_predict:
+  channel: PerCP-H
   sign: greater_than
   value: 2000000
   required: false
   description: >
-    This stain specifically marks dead cells; 
-    Any event meeting the threshold will be classified as `dead`.
-  type: Stain
-
-stain2_predict:
-  channel: PerCP-H
-  sign: greater_than
-  value: 500000
-  required: false
-  description: >
-    This stain specifically describes total cells; 
-    all events where the threshold is met will be classified as `cells`. The rest of the events will be classified as `debris`.
+    This stain specifically marks dead cells.
+    All events meeting the threshold will be classified as `dead`. The rest will be classified as `live`, but careful! 
+    You need to combine this with stain1 to make sure you have living cells.
   type: Stain
 
 extra_stains:

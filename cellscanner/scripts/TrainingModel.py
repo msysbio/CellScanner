@@ -1,31 +1,38 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox,\
-    QGroupBox, QLabel, QMessageBox, QApplication, QSpinBox
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject
-
-from .helpers import button_style
-from .apply_umap import process_files
-from .GUIhelpers import LabeledComboBox, LabeledSpinBox, LiveDeadDebrisSelectors, GatingMixin, GatingCheckBox
-
 """
-TrainingModel.py
-
-This module is part of the CellScanner application, responsible for processing flow cytometry data, training
-a neural network model, and evaluating its performance. The `TrainModelPanel` class provides a user interface
-panel for selecting training parameters and initiating the training process.
-
-Key Features:
-- Allows users to select the number of random events to sample from each monoculture and blank file.
-- Handles the preprocessing of `.fcs` files, including file parsing, data sampling, and scaling.
-- Implements UMAP for dimensionality reduction and filtering of data based on nearest neighbors.
-- Trains a neural network model using the processed data.
-- Evaluates the trained model and saves performance metrics, including a confusion matrix and classification report.
-
-Classes:
-- TrainModelPanel: A QWidget subclass that provides the interface for training the neural network model.
+Panel for setting the parameters and performing:
+- UMAP on the training data
+- training of a neural network model
+- and evaluating its performance.
 
 Usage:
 - The `TrainModelPanel` is integrated into the main application window and handles the entire model training pipeline.
 
+"""
+
+from PyQt5.QtCore import QObject, Qt, QThread, pyqtSignal
+from PyQt5.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
+
+from .apply_umap import process_files
+from .GUIhelpers import (
+    GatingCheckBox,
+    GatingMixin,
+    LabeledComboBox,
+    LabeledSpinBox,
+    LiveDeadDebrisSelectors,
+    button_style,
+)
+
+"""
 Authors:
  - Ermis Ioannis Michail Delopoulos
  - Haris Zafeiropoulos
@@ -33,16 +40,19 @@ Authors:
 Date: 2024-2025
 """
 
+
 class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheckBox):
+    """
+    User interface panel for selecting training parameters and initiating the training process.
+    Inherits parent class (ImportFile) and a set of mixin classes for enabling line gating
+
+    """
 
     def __init__(self, file_panel, parent=None):
-        """
-        Training panel using the mixin classes for gating
 
-        """
         super().__init__(parent)
         self.file_panel = file_panel
-        self.layout = QVBoxLayout(self)
+        self.train_panel_layout = QVBoxLayout(self)
 
         # Group box for "File Settings"
         self.file_settings_group = QGroupBox("File Settings", self)
@@ -59,15 +69,13 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
         )
 
         self.event_combo = QComboBox(self)
-        self.event_combo.addItems(
-            [str(i) for i in range(1000, 100000, 5000)]
-        )
+        self.event_combo.addItems([str(i) for i in range(1000, 100000, 5000)])
         event_layout.addWidget(self.event_label)
         event_layout.addWidget(self.event_combo)
 
         # Add the event_layout into file_settings_layout, then add file_settings_group to the main layout.
         file_settings_layout.addLayout(event_layout)
-        self.layout.addWidget(self.file_settings_group)
+        self.train_panel_layout.addWidget(self.file_settings_group)
 
         # -----------------------------------------------------------
 
@@ -77,18 +85,15 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
 
         #  UMAP n_neighbors
         self.umap_nneighbors_combo = LabeledComboBox(
-            "UMAP n_neighbors:",
-            ["5","10","15", "30", "50", "100", "200"],
-            "50",
-            self
+            "UMAP n_neighbors:", ["5", "10", "15", "30", "50", "100", "200"], "50", self
         )
 
         # UMAP min_dist
         self.umap_mindist_combo = LabeledComboBox(
             "UMAP min_dist:",
-            ["0.0", "0.1","0.2", "0.3", "0.4", "0.5", "0.6","0.7","0.8","0.9"],
+            ["0.0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9"],
             "0.0",
-            self
+            self,
         )
 
         # Add UMAP widgets
@@ -96,39 +101,40 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
         umap_layout.addWidget(self.umap_mindist_combo)
 
         # Add the UMAP group box to the main layout
-        self.layout.addWidget(self.umap_group)
+        self.train_panel_layout.addWidget(self.umap_group)
 
         # -----------------------------------------------------------
 
         # Nearest Neighbors Settings GroupBox
-        self.nn_group = QGroupBox("Nearest Neighbors Threshold Settings (NN is 50)", self)
+        self.nn_group = QGroupBox(
+            "Nearest Neighbors Threshold Settings (NN is 50)", self
+        )
         nn_layout = QVBoxLayout(self.nn_group)
 
         # Non-blank threshold
         self.nn_nonblank_combo = LabeledComboBox(
             "Neighbor threshold (non-Blank):",
-            ["10","15", "20","25", "30","35", "40"],
+            ["10", "15", "20", "25", "30", "35", "40"],
             "25",
-            self
+            self,
         )
         # Blank threshold
         self.nn_blank_combo = LabeledComboBox(
             "Neighbor threshold (Blank):",
-            ["10","15","20","25", "30", "35", "40"],
+            ["10", "15", "20", "25", "30", "35", "40"],
             "20",
-            self
+            self,
         )
         # SCALING CONSTANT
         self.scaling_constant = LabeledSpinBox(
-            "Scaling Constant:",
-            min_value=0, max_value=1000, step=1, default_value=150
+            "Scaling Constant:", min_value=0, max_value=1000, step=1, default_value=150
         )
         nn_layout.addWidget(self.scaling_constant)
         nn_layout.addWidget(self.nn_blank_combo)
         nn_layout.addWidget(self.nn_nonblank_combo)
 
         # Add the NN group box to the main layout
-        self.layout.addWidget(self.nn_group)
+        self.train_panel_layout.addWidget(self.nn_group)
 
         # -----------------------------------------------------------
 
@@ -137,31 +143,48 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
         model_settings_layout = QVBoxLayout(self.model_settings_group)
 
         # K-Fold SELECTION
-        self.kfold_combo = LabeledComboBox("Number of Folds:", ["0", "5", "10"], parent=self)
+        self.kfold_combo = LabeledComboBox(
+            "Number of Folds:", ["0", "5", "10"], parent=self
+        )
 
         # EPOCHS
-        self.epochs_combo = LabeledComboBox("Epochs:", ["10", "20", "30", "50", "100","500"], "50", self)
+        self.epochs_combo = LabeledComboBox(
+            "Epochs:", ["10", "20", "30", "50", "100", "500"], "50", self
+        )
 
         # BATCH SIZE
-        self.batch_combo = LabeledComboBox("Batch Size:", ["16", "32", "64", "128"], "32", self)
+        self.batch_combo = LabeledComboBox(
+            "Batch Size:", ["16", "32", "64", "128"], "32", self
+        )
 
         # PATIENCE
-        self.patience_combo = LabeledComboBox("EarlyStopping Patience:", ["5", "10", "15", "20"], "10", self)
+        self.patience_combo = LabeledComboBox(
+            "EarlyStopping Patience:", ["5", "10", "15", "20"], "10", self
+        )
+
+        # RANDOM SEED (UMAP, event sampling, model initialisation) for reproducible runs
+        self.seed = LabeledSpinBox(
+            "Random seed:", min_value=0, max_value=999999, step=1, default_value=42
+        )
+        self.seed.setToolTip(
+            "Same inputs and seed give the same results; change it to check how stable the results are."
+        )
 
         # Add the widgets to the group box layout
         model_settings_layout.addWidget(self.epochs_combo)
         model_settings_layout.addWidget(self.kfold_combo)
         model_settings_layout.addWidget(self.batch_combo)
         model_settings_layout.addWidget(self.patience_combo)
+        model_settings_layout.addWidget(self.seed)
 
         # Add the QGroupBox to your main layout
-        self.layout.addWidget(self.model_settings_group)
+        self.train_panel_layout.addWidget(self.model_settings_group)
 
         # -----------------------------------------------------------
 
         # Gating option at the training step
-        self.train_gating = QGroupBox("Line gating", self)
-        self.train_gating_layout = QVBoxLayout(self.train_gating)
+        # self.train_gating = QGroupBox("Line gating", self)
+        # self.train_gating_layout = QVBoxLayout(self.train_gating)
 
         # Add a checkbox to apply gating
         self.gating_checkbox()  # NOTE: from the GatingCheckBox mixin class, passed in the class definition
@@ -172,7 +195,7 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
         # Initially hide / show after click on gating checkbox
         self.toggle_gating_options()
 
-        self.layout.addWidget(self.train_gating)
+        # self.train_panel_layout.addWidget(self.train_gating)
 
         # -----------------------------------------------------------
 
@@ -181,7 +204,7 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
         self.process_button.setStyleSheet(button_style())
 
         self.process_button.clicked.connect(self.start_training_process)
-        self.layout.addWidget(self.process_button)
+        self.train_panel_layout.addWidget(self.process_button)
 
         # Store the processed and filtered dataframe
         self.cleaned_data = None
@@ -193,21 +216,21 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
         # Keep a reference to best model
         self.best_model = None
 
-    def start_loading_cursor(self):
+    def _start_loading_cursor(self):
         QApplication.setOverrideCursor(Qt.WaitCursor)
 
-    def stop_loading_cursor(self):
+    def _stop_loading_cursor(self):
         QApplication.restoreOverrideCursor()
 
     def start_training_process(self):
         """
-        Establihes a thread and a worker to execute the run_process_files().
+        Establihes a thread and a worker to execute the :func:`run_process_files`.
         The signals of the worker allows not to exit the app in case of error
         and to return a success message when complete.
         """
         try:
-            #start the loading cursor
-            self.start_loading_cursor()
+            # start the loading cursor
+            self._start_loading_cursor()
 
             if not self.file_panel.species_files and not self.file_panel.blank_files:
                 raise ValueError("No files selected. Please import files.")
@@ -216,11 +239,11 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
             self.thread = QThread()
             self.worker = WorkerProcessFiles(TrainModelPanel=self)
             self.worker.moveToThread(self.thread)
-            self.worker.error_signal.connect(self.on_error)
+            self.worker.error_signal.connect(self._on_error)
             self.thread.started.connect(self.worker.run_process_files)
 
             # Apply UMAP & train neural network
-            self.worker.finished_signal.connect(self.on_finished)
+            self.worker.finished_signal.connect(self._on_finished)
             self.worker.finished_signal.connect(self.thread.quit)
 
             # Ensure the thread finishes properly but does not exit the app
@@ -230,33 +253,36 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
             self.thread.start()
 
         except Exception as e:
-           self.on_error(str(e))
+            self._on_error(str(e))
 
-
-    def on_finished(self):
-        self.stop_loading_cursor()
-        QMessageBox.information(self, "Success",
-            f"Training process completed successfully. Suggested thresholds equals to {self.cs_uncertainty_threshold}"
+    def _on_finished(self):
+        self._stop_loading_cursor()
+        QMessageBox.information(
+            self,
+            "Success",
+            f"Training process completed successfully. Suggested thresholds equals to {self.cs_uncertainty_threshold}",
         )
         self.thread = None
 
-    def on_error(self, message):
+    def _on_error(self, message):
         try:
-            self.stop_loading_cursor()
+            self._stop_loading_cursor()
             QMessageBox.critical(self, "Error", message)
         except Exception as e:
             print(f"Error displaying the message: {e}")
         finally:
             self.thread = None
 
+
 # A worker class allows tasks without blocking the main UI thread,
 class WorkerProcessFiles(QObject):
     """
     Worker class for processing files in a separate thread.
 
-    This worker is responsible for running `process_files()` without freezing the main UI.
+    This worker is responsible for running :func:`process_files` without freezing the main UI.
     It emits signals to indicate success or failure, allowing the main UI to handle errors properly.
     """
+
     finished_signal = pyqtSignal()  # Define a signal for completion
     error_signal = pyqtSignal(str)
 
@@ -264,13 +290,12 @@ class WorkerProcessFiles(QObject):
         super().__init__()
         self.TrainModelPanel = TrainModelPanel  # Store the QWidget instance
 
-
     def run_process_files(self):
+        """Run the :func:`process_files` and send success/failure signals to the related thread"""
         try:
             self.TrainModelPanel = process_files(self.TrainModelPanel)
             self.finished_signal.emit()  # Emit the finished signal when done
         except Exception as e:
-            print("fuck this")
-            self.error_signal.emit(f"Error during prediction: {str(e)}")
+            error_message = str(e)  # Extract only the error message
+            self.error_signal.emit(error_message)  # Emit it to the GUI
             self.TrainModelPanel.thread.quit()
-
