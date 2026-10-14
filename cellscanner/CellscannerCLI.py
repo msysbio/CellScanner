@@ -5,18 +5,18 @@ CellScanner Command Line Interface main class.
 Besides using CellScanner throught its GUI, you may use it through a CLI.
 To this end, you should first complete a [`config.yml`](../config.yml) file, providing the necessary parameters.
 """
+import argparse
 import os
 import shutil
 import sys
-import yaml
-import argparse
-import fcsparser
 from collections import defaultdict
 
+import fcsparser
+import yaml
 from scripts import __version__
 
 
-class CellScannerCLI():
+class CellScannerCLI:
 
     def __init__(self, args):
         # Initialize model-related attributes
@@ -30,7 +30,7 @@ class CellScannerCLI():
         conf = load_yaml(args.config)
 
         # Load CellScanner features
-        from scripts.helpers import get_app_dir,  load_model_from_files
+        from scripts.helpers import get_app_dir, load_model_from_files
 
         # Output dir
         outdir = conf.get("output_directory").get("path")
@@ -75,6 +75,7 @@ class CellScannerCLI():
             self.early_stopping_patience = get_param_value("early_stopping_patience", conf)
             self.scaling_constant = get_param_value("scaling_constant", conf)
             self.seed = conf.get("seed", {}).get("value", 42)  # older configs have no seed entry
+            self.exclude_channels = (conf.get("exclude_channels") or {}).get("value") or []
 
         # Coculture files
         coc_directories = conf.get("coculture_files").get("directories")
@@ -108,6 +109,18 @@ class CellScannerCLI():
             self.extra_stains = get_extra_stains(conf)
 
             self._channel_sannity_check()
+
+            # Training stains are separate from the prediction ones; warn if only the latter are set
+            if (
+                self.prev_trained_model is None
+                and self.stain1_train.channel is None
+                and self.stain2_train.channel is None
+            ):
+                print(
+                    "WARNING: Gating is on but no training stains are set: the model will be trained on all "
+                    "monoculture events, including debris and dead cells. Set stain1_train / stain2_train "
+                    "to train on live cells only."
+                )
 
     def _channel_sannity_check(self):
         """
@@ -146,7 +159,8 @@ class CellScannerCLI():
             blank_threshold=self.nn_blank, species_files_names_dict=self.all_species,
             blank_files=self.blank_files, working_directory=self.output_dir,
             stain_1=self.stain1_train, stain_2=self.stain2_train,
-            seed=self.seed
+            seed=self.seed,
+            exclude_channels=self.exclude_channels,
         )
         print("Files processed. Preparing for training:")
         X_whitened, y_categorical, self.scaler, self.le = prepare_for_training(
@@ -176,7 +190,7 @@ class CellScannerCLI():
         In case where several co-culture files have been provided (samples), CellScanner makes its prediction per sample
         and in the end merges them in a single file.
         """
-        from scripts.helpers import time_based_dir, merge_prediction_results
+        from scripts.helpers import merge_prediction_results, time_based_dir
         from scripts.run_prediction import predict
 
         print("About to start predicting co-culture profiles.")

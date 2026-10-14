@@ -54,10 +54,10 @@ def process_file(
         df = df.drop(columns=["Time"])  # Remove Time column
 
     if stain_1.channel is None and stain_2.channel is None:
-        print(
-            f"No gating, no further processing before the training step for file: {file}"
-        )
-        print(f"File is probably a blank. Is it? {species_name}")
+        if species_name == "Blank":
+            print(f"Blank file, used without gating: {file}")
+        else:
+            print(f"No training gating for {species_name}; all events can be used: {file}")
 
     else:
         print(f"Gating file: {file}")
@@ -144,6 +144,11 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
             "blank_files": TrainPanel.file_panel.blank_files,
             "working_directory": TrainPanel.file_panel.working_directory,
             "seed": TrainPanel.seed.spin_box.value(),
+            "exclude_channels": [
+                c.strip()
+                for c in TrainPanel.exclude_channels_input.text().split(",")
+                if c.strip()
+            ],
         }
 
         # NOTE (Haris Zafeiropoulos, 2025-03-31):
@@ -168,6 +173,7 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
         ]
         params = {key: kwargs[key] for key in required_keys}
         params["seed"] = kwargs.get("seed")
+        params["exclude_channels"] = kwargs.get("exclude_channels") or []
         stain_1, stain_2 = params["stain_1"], params["stain_2"]
 
     # Extract parameters into variables for later use
@@ -180,6 +186,7 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
     blank_files = params["blank_files"]
     working_directory = params["working_directory"]
     seed = params["seed"]
+    exclude_channels = params["exclude_channels"]
     model_dir = os.path.join(working_directory, "model")
     os.makedirs(model_dir, exist_ok=True)
 
@@ -265,6 +272,33 @@ def process_files(TrainPanel: "TrainModelPanel" = None, **kwargs):
         ]
         + blank_dataframes
     )
+
+    # Training keeps only live cells, so the model never sees the dead-cell stain at the values dead cells have
+    if (
+        isinstance(stain_2, Stain)
+        and stain_2.channel
+        and stain_2.channel not in exclude_channels
+    ):
+        print(
+            f"NOTE: Training removes dead cells with {stain_2.channel}, so the model never sees the values dead cells "
+            f"have in this channel, yet it uses it as an input. It can make sense to exclude channels the training "
+            f"never sees in full, e.g. exclude_channels: [{stain_2.channel}] (and its -A/-H counterpart)."
+        )
+
+    # Channels excluded from the model inputs (e.g. stain channels) are left out of UMAP and training;
+    # gating above still used them. The scaler records the remaining channels, so prediction uses the same ones.
+    if exclude_channels:
+        missing = [c for c in exclude_channels if c not in combined_df.columns]
+        if missing:
+            raise ValueError(
+                f"Channels to exclude not found in the .fcs files: {missing}. "
+                f"Available channels: {[c for c in combined_df.columns if c != 'Species']}"
+            )
+        combined_df = combined_df.drop(columns=exclude_channels)
+        if combined_df.shape[1] < 2:
+            raise ValueError("No channels left for training after excluding channels.")
+        print(f"Channels excluded from the model inputs: {exclude_channels}")
+
     columns_to_plot = combined_df.columns.difference(
         ["Species"]
     ).tolist()  # All column names except of those in the list

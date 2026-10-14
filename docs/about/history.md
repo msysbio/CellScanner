@@ -38,6 +38,7 @@ Earlier releases are listed on [GitHub](https://github.com/msysbio/CellScanner/t
   clear message (it was silently dropped, or failed with an unclear error).
 - `.fcs` files without a `Time` column are no longer skipped in the GUI.
 - Training statistics: fold count and best fold were swapped.
+- Training messages no longer call monoculture files "probably a blank" when they are not gated.
 
 ### Added
 
@@ -45,6 +46,15 @@ Earlier releases are listed on [GitHub](https://github.com/msysbio/CellScanner/t
   recording the settings of each run; the CLI also keeps a copy of its config as `config_used.yml`.
 - Version tracking (`cellscanner/scripts/__init__.py`, `--version`, GUI title, docs).
 - Installation docs for Windows from the source code and with Docker, and a CLI tutorial.
+- `exclude_channels` (CLI) / "Exclude channels from model inputs" (GUI): channels the model does not use
+  as inputs, while gating can still use them. Useful for channels whose values the training never sees in
+  full, e.g. the dead-cell stain when training is gated on live cells. A note during training suggests it
+  when the dead-cell training stain is still a model input.
+- A warning when gating is on but only the prediction stains are set, as training then uses all
+  monoculture events, including debris and dead cells.
+- The `config.yml` template gates the training data with the same stains as the prediction step
+  (`FITC-A > 10000`, `PerCP-H > 2000000`) and no longer points `prev_trained_model` to a model that does
+  not exist yet.
 
 ### Removed
 

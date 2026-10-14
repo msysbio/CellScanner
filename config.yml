@@ -73,7 +73,7 @@ coculture_files:
     You can use both relative paths and paths based on the home directory (~).
 
 prev_trained_model:
-  path: Testfiles/cs_output/model
+  path: 
   required: false
   default:
   description: >
@@ -188,6 +188,26 @@ seed:
     Note that a fixed seed makes UMAP run single-threaded.
   type: int
 
+exclude_channels:
+  value: []
+  required: false
+  default: []
+  description: |
+    Channels the model does not use as inputs, e.g. [PerCP-H, PerCP-A]. Gating can still use them,
+    and the setting works with or without gating.
+    It makes sense to exclude channels whose values the training never sees in full, for example:
+    - A stain used to gate the training data, typically the dead-cell stain (e.g. PI): training keeps
+      only live cells, so the model never sees the high values dead cells have in that channel and
+      cannot know which species a dead cell in a co-culture belongs to from it. Excluding the channel
+      lets dead cells be classified by the other channels.
+    - A stain only some samples received, e.g. stained co-cultures but unstained monocultures: the
+      channel then looks completely different from anything the model learned.
+    - Channels that differ between the monoculture and co-culture runs for technical reasons (staining
+      batch, instrument settings), or that carry no biological signal (e.g. FSC-Width, unused detectors).
+    List both the -A and -H versions of a channel if both are in your files.
+    A model trained this way keeps ignoring these channels when it is reused.
+  type: list of str
+
 # ---------------------
 # Prediction parameters
 # ---------------------
@@ -270,9 +290,9 @@ gating:
   type: bool
 
 stain1_train:
-  channel:
-  sign:
-  value:
+  channel: FITC-A
+  sign: greater_than
+  value: 10000
   description: >
     This stain specifically describes total cells; 
     all events where the threshold is met will be classified as `cells`. The rest of the events will be classified as `debris`.
@@ -280,9 +300,9 @@ stain1_train:
   type: Stain
 
 stain2_train:
-  channel:
-  sign:
-  value:
+  channel: PerCP-H
+  sign: greater_than
+  value: 2000000
   required: false
   sign_values:
     - greater_than
@@ -296,7 +316,7 @@ stain2_train:
 stain1_predict:
   channel: FITC-A
   sign: greater_than
-  value: 500000
+  value: 10000
   required: false
   description: >
     This stain specifically describes total cells.
