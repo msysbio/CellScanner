@@ -17,7 +17,7 @@ To this end, you may run the following chunk to get CellScanner and create a `co
 ```bash
 git clone https://github.com/msysbio/CellScanner.git
 cd CellScanner
-conda create -n cellscanner python=3.12.2 
+conda create -n cellscanner python=3.12.2
 conda activate cellscanner
 pip install -r requirements.txt
 ```
@@ -28,7 +28,7 @@ To run CellScanner with its GUI, you may now run:
 # Always remember to activate your conda environment, if you set one for CellScanner
 conda activate cellscanner
 # If `python` returns an error message that is not there, try with `python3` instead
-python Cellscanner.py
+python cellscanner/Cellscanner.py
 ```
 
 This will pop-up CellScanner where you can now import your data, fill in your training parameters and 
@@ -37,27 +37,22 @@ predict your species.
 ![gui_main](docs/_static/GUI.png)
 
 
-Keep in mind that the CellScanner GUI is a PyQt5 app, meaning it requires from the host to have a working X11 windowing system.
+Keep in mind that the CellScanner GUI is a PyQt5 app: it needs a desktop session to open its window (on Linux, an X11 or Wayland session).
 
 
 #### Windows
 
-In Windows, you may also follow the steps described above for the Linux and macOS systems.
-If you try through a WSL however, as already mentioned an X11 is required, which you would have to set up on your own.
-
-Alternatively, you can build an `.exe` on your own
-**Attention!** Do not use a WSL. Also, that [`pyinstaller`](https://pyinstaller.org/en/stable/) is available. 
-
-Then, after you make sure you have activated the `cellscanner` conda environment, you may run:
+Run the same steps in the **Anaconda Prompt** (or **Miniforge Prompt**) that comes with your conda installation.
+If you do not have `git`, download the repository as a ZIP file (*Code* → *Download ZIP*) and unzip it instead of cloning.
+Then start CellScanner from the root folder of the repository:
 
 ```bash
-pyinstaller --onefile --icon=logo.ico --add-data "logo.png:." Cellscanner.py
+conda activate cellscanner
+python cellscanner\Cellscanner.py
 ```
 
-<!-- REMEMBER to add link -->
-**.. or** 
-
-you can simply download the `.exe` of CellScanner v2.0 from [here](). 
+Run it directly in Windows rather than in WSL: Windows shows the GUI window itself.
+You can also use the [Docker](#docker) image, which is the simplest way to run the CLI on Windows.
 
 
 
@@ -90,7 +85,7 @@ Once your configuration file is ready, you may run CellScanner CLI :
 
 ```bash
 conda activate cellscanner
-python CellscannerCLI.py --config config.yml
+python cellscanner/CellscannerCLI.py --config config.yml
 ```
 
 
@@ -107,5 +102,32 @@ For the new features that have been added, a manuscript is in process. :pencil:
 
 
 
+## Docker
 
+The image runs both the GUI and the CLI. Mount the directory with your input files to `/media`
+in the container: CellScanner reads its inputs from there and writes its findings back to it.
 
+**GUI** (Linux): first allow local connections to your display, then run the image:
+
+  ```bash
+  xhost +local:
+  docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v ./Testfiles:/media hariszaf/cell_scanner
+  ```
+
+**CLI** (no display needed): put your `config.yml` in the mounted directory and use container paths
+(`/media/...`) for the input files in it:
+
+  ```bash
+  docker run --rm --user $(id -u):$(id -g) -v ./Testfiles:/media hariszaf/cell_scanner python CellscannerCLI.py -c /media/config.yml
+  ```
+
+`--user` makes the output files belong to you rather than to root (Linux). In Windows PowerShell, leave it out and
+write the folder as `-v ${PWD}\Testfiles:/media`.
+Use `python CellscannerCLI.py --version` to check which CellScanner version an image contains.
+
+**Building the image** (tagged with the version in `cellscanner/scripts/__init__.py`):
+
+  ```bash
+  VERSION=$(python -c "exec(open('cellscanner/scripts/__init__.py').read()); print(__version__)")
+  docker build --build-arg CELLSCANNER_VERSION=$VERSION -t hariszaf/cell_scanner:$VERSION -t hariszaf/cell_scanner:latest .
+  ```
