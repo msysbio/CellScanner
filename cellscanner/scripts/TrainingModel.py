@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QPushButton,
     QVBoxLayout,
@@ -191,6 +192,27 @@ class TrainModelPanel(QWidget, LiveDeadDebrisSelectors, GatingMixin, GatingCheck
 
         # Fire basic stains
         self.basic_stains()  # NOTE: from the LiveDeadDebrisSelectors mixin class, passed in the class definition
+
+        # Channels excluded from the model inputs, below the stains they often relate to (e.g. the dead-cell stain);
+        # always shown and applied, as excluding channels can also make sense without gating
+        self.exclude_channels_widget = QWidget(self)
+        exclude_layout = QHBoxLayout(self.exclude_channels_widget)
+        exclude_layout.setContentsMargins(0, 0, 0, 0)
+        exclude_layout.addWidget(QLabel("Exclude channels from model inputs:", self))
+        self.exclude_channels_input = QLineEdit(self)
+        self.exclude_channels_input.setPlaceholderText("e.g. PerCP-H, PerCP-A (comma-separated)")
+        self.exclude_channels_input.setToolTip(
+            "Channels the model does not use to classify events (gating can still use them). "
+            "Exclude channels whose values the training never sees in full:\n"
+            "- a stain used to gate the training data, typically the dead-cell stain (PI): training keeps only "
+            "live cells, so dead cells in a co-culture are then classified by the other channels;\n"
+            "- a stain only some samples received, e.g. stained co-cultures but unstained monocultures;\n"
+            "- channels that differ between runs for technical reasons, or carry no biological signal "
+            "(e.g. FSC-Width).\n"
+            "List both the -A and -H versions of a channel."
+        )
+        exclude_layout.addWidget(self.exclude_channels_input)
+        self.train_panel_layout.addWidget(self.exclude_channels_widget)
 
         # Initially hide / show after click on gating checkbox
         self.toggle_gating_options()
